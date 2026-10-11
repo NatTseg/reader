@@ -38,6 +38,9 @@ function reader(stored = {}) {
     console,
     Blob,
     TextDecoder,
+    TextEncoder,
+    File: require("node:buffer").File,
+    crypto: require("node:crypto").webcrypto,
     setTimeout,
     clearTimeout,
     localStorage: {
@@ -64,7 +67,8 @@ function reader(stored = {}) {
   vm.runInContext(fs.readFileSync(path.join(root, "persistence.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "cloud-sync.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "reader-tools.js"), "utf8"), context);
-  vm.runInContext(fs.readFileSync(path.join(root, "library.js"), "utf8"), context);
+  for (const file of ["vendor/fflate/fflate.js", "library-formats.js", "library.js", "library-tools.js", "library-backup.js"])
+    vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "note-alignment.js"), "utf8"), context);
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   // Bind functions and event handlers, without rendering the initial browser view.
@@ -147,7 +151,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v30",
         "reader-v31",
         "reader-v32",
-        "reader-v33",
+        "reader-v34",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -726,4 +730,146 @@ test('offline sync never calls the server and conflicting comments do not upload
   run(`navigator.onLine=false;`);await run('syncCloud()');assert.equal(run('uploads.length'),0);
   run(`navigator.onLine=true;local.reader.comments['JHN:1:1']='From phone';`);await run('syncCloud()');
   assert.equal(run('uploads.length'),0);assert.equal(run('cloudConflict.conflicts.length'),1);
+});
+
+test('PDF text preserves heading and paragraph boundaries without changing the words', () => {
+  const run=reader();
+  run(`window.content={items:[
+    {str:'A heading',transform:[18,0,0,18,40,700],hasEOL:true},
+    {str:'This first paragraph has enough ordinary body text to establish the normal size.',transform:[12,0,0,12,40,670],hasEOL:true},
+    {str:'Its next line continues the same paragraph and preserves the wording.',transform:[12,0,0,12,40,654],hasEOL:true},
+    {str:'This is a separate paragraph after a larger gap, with more ordinary text.',transform:[12,0,0,12,40,622],hasEOL:true},
+    {str:'<script> must stay literal text.',transform:[12,0,0,12,40,606],hasEOL:true}
+  ]};window.blocks=libraryPdfBlocks(content);`);
+  assert.equal(run('blocks.length'),3);
+  assert.equal(run('blocks[0].kind'),'heading');
+  assert.match(run('blocks[1].text'),/size\. Its next line/);
+  assert.equal(run('libraryBlocksHtml(blocks).includes("<script>")'),false);
+  assert.match(run('libraryBlocksHtml(blocks)'),/&lt;script&gt;/);
+  assert.equal(run('libraryPdfBlocks({items:[]}).length'),0);
+});
+
+test('archive paths resolve EPUB relatives and reject remote or escaping resources', () => {
+  const run=reader();
+  assert.equal(run('libraryArchivePath("OPS/text/ch1.xhtml","../images/picture.png")'),'OPS/images/picture.png');
+  assert.equal(run('libraryArchivePath("OPS/text/ch1.xhtml","ch2.xhtml#note")'),'OPS/text/ch2.xhtml');
+  for(const href of ['https://example.com/picture.png','javascript:alert(1)','//example.com/a','../../../secret','..%2f..%2f..%2fsecret','x\\y'])
+    assert.equal(run(`libraryArchivePath('OPS/text/ch1.xhtml',${JSON.stringify(href)})`),null,href);
+});
+
+test('ZIP imports reject traversal, oversized entries, and excessive expansion before decompression', () => {
+  const run=reader();
+  run(`window.good=fflate.zipSync({'mimetype':fflate.strToU8('application/epub+zip')});`);
+  assert.equal(run('fflate.strFromU8(libraryZipEntries(good).mimetype)'),'application/epub+zip');
+  run(`window.bad=fflate.zipSync({'../outside':new Uint8Array([1])});`);
+  assert.throws(()=>run('libraryZipEntries(bad)'),/invalid entries/);
+  run(`window.large=fflate.zipSync({'a':new Uint8Array(500),'b':new Uint8Array(500)});`);
+  assert.throws(()=>run('libraryZipEntries(large,2000,100)'),/too large/);
+  assert.throws(()=>run('libraryZipEntries(large,800,600)'),/too large/);
+});
+
+function seedLibraryBackup(run) {
+  run(`loadPrefs();rememberScroll=()=>{};studyRead=async()=>null;
+    window.pdfBytes=new TextEncoder().encode('%PDF-1.7\\nPrivate backup test file');
+    window.file=new File([pdfBytes],'my-book.pdf',{type:'application/pdf'});`);
+  return run(`(async()=>{
+    const hash=await libraryFileHash(pdfBytes);
+    window.book={id:'pdf-'+hash,hash,format:'pdf',title:'My book',author:'An author',filename:'my-book.pdf',size:file.size,
+      pages:24,page:14,scroll:.45,view:'text',marks:[{id:'test-mark',page:14,scroll:.45,quote:'Remember this',note:'My reflection',createdAt:10}],addedAt:1,lastReadAt:20};
+    libraryBooks=[book];snapshotLibrary=async()=>({books:[book],files:{[book.id]:file}});
+    inspectLibraryFile=async()=>({pages:24});
+  })()`);
+}
+
+test('complete archives round-trip original book bytes, notes, progress, and Bible saves without credentials', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  run(`state.comments={'JHN:1:1':'Keep my Bible note'};state.accessToken='never export';`);
+  const archive=await run('createReaderArchive()');
+  run(`window.archiveInput=new Blob([]);`);
+  // Pass data through the reader's own Blob wrapper without depending on a filesystem.
+  const bytes=new Uint8Array(await archive.arrayBuffer());
+  run(`window.archiveInput=new Blob([new Uint8Array(${JSON.stringify([...bytes])})]);`);
+  const restored=await run('readReaderArchive(archiveInput)');
+  assert.equal(restored.books[0].page,14);
+  assert.equal(restored.books[0].scroll,.45);
+  assert.equal(restored.books[0].marks[0].note,'My reflection');
+  assert.equal(restored.reader.reader.comments['JHN:1:1'],'Keep my Bible note');
+  assert.equal(restored.reader.reader.accessToken,undefined);
+  assert.deepEqual(new Uint8Array(await restored.files[restored.books[0].id].arrayBuffer()),new TextEncoder().encode('%PDF-1.7\nPrivate backup test file'));
+});
+
+test('complete restore rejects a damaged file before any storage mutation', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  const blob=await run('createReaderArchive()');
+  run(`window.raw=new Uint8Array(${JSON.stringify([...new Uint8Array(await blob.arrayBuffer())])});window.entries=libraryZipEntries(raw);entries['books/0000.pdf'][0]=0;window.broken=new Blob([fflate.zipSync(entries)]);`);
+  await assert.rejects(run('readReaderArchive(broken)'),/damaged/);
+  assert.equal(run('libraryBooks[0].page'),14);
+});
+
+test('library metadata validation rejects invalid page positions and unsafe marker identifiers', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  assert.equal(run('validateLibraryCatalog([book])[0].marks.length'),1);
+  run('window.invalid={...book,page:25}');
+  assert.throws(()=>run('validateLibraryCatalog([invalid])'),/invalid library/);
+  run(`invalid={...book,marks:[{...book.marks[0],id:'" onclick="bad'}]}`);
+  assert.throws(()=>run('validateLibraryCatalog([invalid])'),/invalid library/);
+  run('invalid={...book,scroll:2}');
+  assert.throws(()=>run('validateLibraryCatalog([invalid])'),/invalid library/);
+});
+
+test('queued library notes and reading-position writes preserve each other', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  run('libraryTransaction=async()=>{};');
+  await run(`Promise.all([updateLibraryBook(book.id,{page:15,scroll:.1}),updateLibraryBook(book.id,b=>({marks:[...b.marks,{id:'second'}]}))])`);
+  assert.equal(run('libraryBooks[0].page'),15);
+  assert.equal(run('libraryBooks[0].marks.length'),2);
+});
+
+test('a failed library write leaves in-memory notes intact', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  run(`libraryTransaction=async()=>{throw new Error('Full disk')};`);
+  await assert.rejects(run('updateLibraryBook(book.id,{marks:[]})'),/Full disk/);
+  assert.equal(run('libraryBooks[0].marks.length'),1);
+});
+
+test('complete restore rolls the library back when the Bible transaction fails', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  run(`window.replacements=[];replaceLibrary=async(snapshot,recovery)=>replacements.push({title:snapshot.books[0].title,recovery:!!recovery});
+    restoreBackup=async()=>{throw new Error('Bible write failed')};
+    window.archive={books:[{...book,title:'Restored book'}],files:{},reader:{}};`);
+  await assert.rejects(run('restoreReaderArchive(archive)'),/Bible write failed/);
+  assert.equal(run('JSON.stringify(replacements)'),JSON.stringify([{title:'Restored book',recovery:true},{title:'My book',recovery:false}]));
+  assert.equal(run('libraryBooks[0].title'),'My book');
+  assert.equal(run('libraryBusy'),false);
+});
+
+test('library search matches literal phrases regardless of letter case and does not interpret markup', () => {
+  const run=reader();
+  assert.match(run('librarySearchSnippet("A quiet moment of prayer and reflection.","PRAYER")'),/prayer/);
+  assert.equal(run('librarySearchSnippet("No words here","missing")'),null);
+  assert.equal(run('librarySearchSnippet("Literal <script> text","<script>")'),'Literal <script> text');
+});
+
+test('old PDF catalog records retain their position and acquire safe defaults for complete backups', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  run('window.old={...book};delete old.format;delete old.marks;delete old.scroll;delete old.lastReadAt;');
+  assert.equal(run('validateLibraryCatalog([old])[0].page'),14);
+  assert.equal(run('validateLibraryCatalog([old])[0].format'),'pdf');
+  assert.equal(run('validateLibraryCatalog([old])[0].marks.length'),0);
+});
+
+test('library result actions retain the search query and bookmarked scroll position', () => {
+  const run=reader();
+  run('window.jumps=[];jumpLibraryLocation=(...args)=>jumps.push(args);');
+  run(`handleLibraryAction({dataset:{libraryJump:'17',libraryQuery:'prayer'}});handleLibraryAction({dataset:{libraryJump:'14',libraryMarkScroll:'.45'}});`);
+  assert.equal(run('jumps[0][0]'),'17');
+  assert.equal(run('jumps[0][3]'),'prayer');
+  assert.equal(run('jumps[1][2]'),.45);
+});
+
+test('backup export detects a damaged stored original instead of producing an unusable archive', async () => {
+  const run=reader();await seedLibraryBackup(run);
+  run(`pdfBytes[0]=0;window.damagedFile=new File([pdfBytes],book.filename,{type:'application/pdf'});snapshotLibrary=async()=>({books:[book],files:{[book.id]:damagedFile}});`);
+  await assert.rejects(run('createReaderArchive()'),/saved file.*damaged/);
+  assert.equal(run('libraryBooks[0].marks[0].note'),'My reflection');
 });

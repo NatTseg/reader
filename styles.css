@@ -632,6 +632,28 @@ textarea {
 .pdf-controls input { display: inline-block; width: 65px; margin: 0; padding: 8px; text-align: center; }
 .pdf-view-controls button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--soft); }
 .library-pdf-text { font: var(--fs)/var(--reading-leading, 1.85) var(--reading-font, Georgia, serif); overflow-wrap: break-word; }
+.library-pdf-text p { margin: 0 0 1em; }
+.library-pdf-text :is(h1,h2,h3,h4,h5,h6) { font-family: var(--reading-font, Georgia, serif); font-weight: 600; line-height: 1.35; margin: 1.6em 0 .65em; }
+.library-pdf-text :is(h1,h2) { font-size: 1.35em; }
+.library-pdf-text h3 { font-size: 1.15em; }
+.library-pdf-text :first-child { margin-top: 0; }
+.library-pdf-text img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
+.library-pdf-text table { display: block; max-width: 100%; overflow-x: auto; }
+.library-pdf-text pre { white-space: pre-wrap; }
+.library-pdf-text blockquote { margin: 1em 0; padding-left: 1em; border-left: 2px solid var(--line); }
+.library-continue { margin: 20px 0 16px; border-color: var(--accent); }
+.library-continue strong, .library-continue .helper { display: block; margin-top: 5px; }
+.library-reader-tools { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 12px; }
+.library-reader-tools [aria-pressed="true"] { color: var(--accent); text-decoration: underline; text-underline-offset: 4px; }
+#libraryToolPanel { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+#libraryToolPanel h3 { margin: 18px 0 12px; }
+#libraryToolPanel form { margin-bottom: 24px; }
+#librarySearchResults .result p { font: inherit; }
+.library-saved { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.library-saved :is(p,blockquote) { white-space: pre-wrap; overflow-wrap: anywhere; }
+.library-saved blockquote { margin: 8px 0; padding-left: 12px; border-left: 2px solid var(--accent); font-family: var(--reading-font, Georgia, serif); }
+.library-search-hit { background: var(--soft); color: var(--text); outline: 1px solid var(--accent); border-radius: 3px; }
+#restoreReaderArchiveFile { margin-top: 8px; }
 .library-pdf-page { max-width: 100%; background: white; }
 dialog.library-reader { width: 800px; }
 .tabs { gap: clamp(0px, 3vw, 28px); }

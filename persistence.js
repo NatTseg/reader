@@ -113,6 +113,7 @@ function renderRestoredReader(reader, personal) {
   if (state.tab === "bible") renderChapter(state.scroll);
   else if (state.tab === "wisdom") renderWisdom();
   else if (state.tab === "prayers") renderPrayers();
+  else if (state.tab === "library") renderLibrary();
   else renderSaved();
 }
 async function restoreBackup(data) {
@@ -185,7 +186,7 @@ async function updateStorageStatus() {
 }
 function showStorage(settingsSnapshot) {
   const parent = settingsSnapshot?.clone ? settingsSnapshot : captureSwipeView(dialog);
-  openDialog("Storage & backup", `<button class="text-button" id="storageBack">‹ Reading settings</button><div id="storageStatus" role="status" aria-live="polite"></div><div class="storage-actions"><button class="secondary" id="protectStorage">Protect device storage</button><button class="secondary" id="repairOffline">Repair offline download</button><button class="text-button" id="refreshStorage">Check again</button></div><h3 class="section-label">Your backup</h3><p class="helper">Includes your reading position, bookmarks, highlights, comments, settings, and imported OSB material. Save the file in Files or iCloud Drive to keep a copy outside this browser. Library PDFs are exported separately from Library.</p><button class="primary" id="exportBackup">Back up my Bible</button><label class="text-button" for="restoreBackupFile">Choose a backup to restore</label><input id="restoreBackupFile" type="file" accept=".json,application/json"><button class="text-button" id="undoRestore" hidden>Undo the last restore</button>`);
+  openDialog("Storage & backup", `<button class="text-button" id="storageBack">‹ Reading settings</button><div id="storageStatus" role="status" aria-live="polite"></div><div class="storage-actions"><button class="secondary" id="protectStorage">Protect device storage</button><button class="secondary" id="repairOffline">Repair offline download</button><button class="text-button" id="refreshStorage">Check again</button></div><h3 class="section-label">Your backup</h3><p class="helper">Includes your reading position, bookmarks, highlights, comments, settings, and imported OSB material. Save the file in Files or iCloud Drive to keep a copy outside this browser. For PDF and EPUB books, saved passages, and reflections, use the complete Reader ZIP backup.</p><button class="primary" data-library-backup="true">Complete backup with Library ›</button><button class="secondary" id="exportBackup">Back up my Bible only</button><label class="text-button" for="restoreBackupFile">Choose a backup to restore</label><input id="restoreBackupFile" type="file" accept=".json,application/json"><button class="text-button" id="undoRestore" hidden>Undo the last restore</button>`);
   dialogBack = showSettings; dialogBackSnapshot = parent;
   $("storageBack").onclick = showSettings;
   $("exportBackup").onclick = exportBackup;

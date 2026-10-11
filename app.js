@@ -1204,6 +1204,7 @@ if (window.BIBLE?.t) {
   else renderSaved();
   await restorePersonalNotes();
   await restoreLibrary();
+  setupLibraryReader();
   document.querySelector(".app").inert = false;
   initializeCloudSync();
   if ("serviceWorker" in navigator)

@@ -4,7 +4,7 @@ Live: https://nattseg.github.io/reader/
 
 Publish the repository root from `main` using Settings → Pages → Deploy from a branch.
 
-Keep all root app assets together, including `persistence.js`, `reader-tools.js`, `library.js`, `note-alignment.js`, `cloud-config.js`, and `cloud-sync.js`, plus the `vendor/pdfjs` directory. The complete offline asset list is in `sw.js`.
+Keep all root app assets together, including `persistence.js`, `reader-tools.js`, `library.js`, `note-alignment.js`, `cloud-config.js`, and `cloud-sync.js`, `library-formats.js`, `library-tools.js`, and `library-backup.js`, plus the `vendor/pdfjs` and `vendor/fflate` directories. The complete offline asset list is in `sw.js`.
 
 Open the Pages URL while connected, let the first download finish, then use your browser’s “Add to Home Screen” or “Install” command. After the service worker has cached the app, it works offline. Bookmarks, comments, highlights, and progress are stored in this browser.
 
@@ -24,6 +24,12 @@ The newer `reader-osb-complete.json` import also supplies conservatively matched
 
 Open Reading settings → Storage & backup. Wait for “Bible and app files are ready for offline reading.” Use Protect device storage to request protection; the status reports whether the browser grants it. Reading changes save automatically without an account or internet connection.
 
-Use Back up my Bible and keep the downloaded JSON in Files or iCloud Drive. It includes imported OSB content, annotations, reading position, history, plans, and preferences. Choose a backup to restore previews the contents before replacing device data; Undo the last restore recovers the preceding copy. Cloud credentials are never included.
+Use Complete backup with Library → Back up Reader (also in Library → Backup & restore) and save the ZIP in Files or iCloud Drive. It includes original PDF/EPUB books, saved book passages, reflections, reading places, and the Bible/OSB backup. Restore checks the files and previews the replacement. Undo the last complete restore keeps a recovery copy of both the library and Bible. The archive limit is 200 MB of book files.
+
+Back up my Bible only keeps the smaller JSON option, compatible with earlier backups, without library books or their annotations. It includes imported OSB content, annotations, reading position, history, plans, and preferences. Choose a backup to restore previews the contents before replacing device data; Undo the last restore recovers the preceding copy. Cloud credentials are never included.
 
 Both localStorage and IndexedDB belong to the browser. Browser data clearing, device loss, or storage eviction can remove them; a file saved outside the browser is the recovery copy. Safari and an installed Home Screen app may use separate storage, so import or restore in the one you use for reading. GitHub Pages updates replace cached public assets without deleting personal data.
+
+## Reading books
+
+Library → Add book accepts PDFs and reflowable EPUB 2/3 files without DRM, under 50 MB. Imports remain private on the device. Open a book and use Contents, Search book, and Save / notes. Select text before Save / notes to include a quotation. Continue reading at the top of Library resumes the most recently opened book. PDF Text view preserves paragraphs where source layout allows; Page view shows the publisher layout. EPUB chapters use your Reader typography settings. Scanned PDFs without selectable text cannot be searched; fixed-layout EPUBs should use their PDF edition.
