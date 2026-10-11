@@ -68,6 +68,7 @@ function applyPersonalNotes(data) {
   const top = pane.scrollTop;
   if (state.tab === "bible") renderChapter(state.scroll);
   else if (state.tab === "wisdom") renderWisdom();
+  else if (state.tab === "library") renderLibrary();
   pane.scrollTop = top;
 }
 async function restorePersonalNotes() {
@@ -139,7 +140,7 @@ function showStudyContext(kind, id, parent) {
   if (!article) return;
   const origin = captureDialogReturn();
   const back = origin?.show || closeDialog;
-  openDialog(article.title, `<article class="essay osb-context"><button class="text-button" id="contextBack">‹ ${esc(origin?.title || "Back to reading")}</button><p class="eyebrow">Orthodox Study Bible · personal copy</p>${studyArticleHtml(article)}</article>`);
+  openDialog(article.title, `<article class="essay osb-context"><button class="text-button" id="contextBack">‹ ${esc(origin?.title || (state.tab === "library" ? "Library" : "Back to reading"))}</button><p class="eyebrow">Orthodox Study Bible · personal copy</p>${studyArticleHtml(article)}</article>`);
   dialogBack = origin ? back : null;
   dialogBackSnapshot = origin?.snapshot || null;
   $("contextBack").onclick = back;

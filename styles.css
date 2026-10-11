@@ -616,6 +616,26 @@ textarea {
   align-items: center;
   justify-content: center;
 }
+.book-tools, .pdf-controls, .pdf-view-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.library-list { display: flex; flex-direction: column; gap: 8px; }
+.library-card .helper { display: block; margin-top: 6px; }
+.library-storage-note { margin-top: 28px; }
+.essay p.essay-attribution, .essay p.essay-source { font: inherit; color: var(--muted); font-size: 13px; }
+.pdf-controls { justify-content: space-between; flex-wrap: nowrap; gap: 6px; }
+.pdf-controls label { font-size: 13px; white-space: nowrap; }
+.pdf-controls input { display: inline-block; width: 65px; margin: 0; padding: 8px; text-align: center; }
+.pdf-view-controls button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--soft); }
+.library-pdf-text { font: var(--fs)/var(--reading-leading, 1.85) var(--reading-font, Georgia, serif); overflow-wrap: break-word; }
+.library-pdf-page { max-width: 100%; background: white; }
+dialog.library-reader { width: 800px; }
+.tabs { gap: clamp(0px, 3vw, 28px); }
+.tabs button { flex: 1; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .highlight-picker {
   display: flex;
   gap: 8px;

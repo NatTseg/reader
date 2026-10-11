@@ -5,6 +5,9 @@ Live: https://nattseg.github.io/reader/
 A simple, offline Scripture reader. LXX2012 Septuagint Old Testament with the World English Bible New Testament, original study notes, bookmarks, highlights, comments, and passages for everyday life.
 
 - **Read:** choose any book and chapter from a vertical chapter list; tap a verse number to save or annotate it.
+- **Random passage:** Books & chapters → Random passage opens a randomly selected source verse in its chapter. Go back or drag right to return to the earlier reading position. All books in the app participate; missing verse numbers are skipped.
+- **Library:** books and guides have their own footer tab. The Spiritual Man by Pope Shenouda III links to the English PDF hosted by the Coptic Orthodox Diocese of the Midlands, U.K. Save that file to Files and import it on the book’s page for offline reading. Add PDF imports other readings. PDFs remain in the separate `reader-library` IndexedDB database, with saved page and text/page-view preferences. Text view follows the PDF extraction order; Page view preserves the original layout. Imports are limited to PDFs under 50 MB without password protection. Save a copy to Files exports the original PDF; Bible JSON backups and cloud sync do not include these files.
+- **Kallistos Ware:** How to read Scripture is available from Library, Books & chapters, and Reading settings. An original short summary is bundled offline, with a link to the full OCA article. When the owner’s OSB import includes How to Read the Bible, the guide also links directly to that private full-text copy offline.
 - **Search:** enter a reference such as John 3:16 or a phrase such as “love one another.”
 - **Wisdom:** browse passages by topic.
 - **Prayers:** a simple prayer book with eight prayers and Psalm text, available offline.
@@ -19,7 +22,7 @@ A simple, offline Scripture reader. LXX2012 Septuagint Old Testament with the Wo
 
 Footer buttons always open their section’s main view. Preferences, saved verses, and imported study notes remain in this browser. Existing `obible3` data is preserved across the redesign. Calendar and Hours sections have been removed.
 
-The Bible text is LXX2012 + WEB NT, not the printed Orthodox Study Bible’s SAAS/NKJV translation. Built-in introductions and verse notes are original; users can import notes from their own copy without uploading them to this repository.
+The Bible text is LXX2012 + WEB NT, not the printed Orthodox Study Bible’s SAAS/NKJV translation. Built-in introductions and verse notes are original; users can import notes from their own copy without uploading them to this repository. Copyrighted library books and the full Kallistos article are not republished here. Their source links open online, and imported private copies stay on the reading device. PDF.js 6.4.299 is vendored with its licenses so the PDF reader works offline.
 
 No account or backend is required. Cloud sync is disabled by default and its settings are hidden until configured. Optional backend code is documented in `cloud/README.md`. Device storage is not a substitute for a backup outside the browser: clearing site data or losing the phone can remove both local copies.
 

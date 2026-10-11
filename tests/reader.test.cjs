@@ -36,6 +36,8 @@ function reader(stored = {}) {
   const context = {
     document,
     console,
+    Blob,
+    TextDecoder,
     setTimeout,
     clearTimeout,
     localStorage: {
@@ -62,6 +64,7 @@ function reader(stored = {}) {
   vm.runInContext(fs.readFileSync(path.join(root, "persistence.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "cloud-sync.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "reader-tools.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "library.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "note-alignment.js"), "utf8"), context);
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   // Bind functions and event handlers, without rendering the initial browser view.
@@ -144,6 +147,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v30",
         "reader-v31",
         "reader-v32",
+        "reader-v33",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -164,7 +168,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -257,7 +261,7 @@ test('prayer book entries have unique IDs and available text', () => {
 
 test('footer navigation always opens the main section and clears nested return state', () => {
   const run = reader();
-  for (const tab of ['wisdom', 'prayers', 'saved', 'bible']) {
+  for (const tab of ['wisdom', 'prayers', 'library', 'saved', 'bible']) {
     run(`wisdomTopic = WISDOM.categories[0].topics[0]; selectedPrayer = PRAYERS[0].id; prayerListTop = 180; wisdomListTop = 120; savedFilter = 'comments'; returnPlace = {tab:'wisdom'}; openTab('${tab}');`);
     assert.equal(run('state.tab'), tab);
     assert.equal(run('wisdomTopic'), null);
@@ -294,6 +298,54 @@ test('linked passages return to the originating Wisdom topic and saved filter', 
   assert.equal(run('state.tab'), 'saved');
   assert.equal(run('savedFilter'), 'comments');
   assert.equal(run('pane.scrollTop'), 42);
+});
+
+test('random passages cover the canon and select populated source verses, including range starts', () => {
+  const run = reader();
+  assert.equal(run('JSON.stringify(randomPassage(()=>0))'), JSON.stringify({book:'GEN',ch:1,v:1}));
+  assert.equal(run('JSON.stringify(randomPassage(()=>1-Number.EPSILON))'), JSON.stringify({book:'REV',ch:22,v:21}));
+  const invalid = run(`randomPassageTargets.filter(p => !bookMeta(p.book) || !chapterText(p.book,p.ch)[p.v] || sourceVerseStart(p.book,p.ch,p.v)!==p.v).length`);
+  assert.equal(invalid, 0);
+  assert.equal(run('new Set(randomPassageTargets.map(p=>p.book)).size'), run('bookOrder().length'));
+  assert.equal(run('randomPassageTargets.some(p=>p.book==="PS2")'), true);
+  assert.equal(run('randomPassageTargets.some(p=>BIBLE.spans?.[keyOf(p.book,p.ch,p.v)])'), true);
+});
+
+test('a random visit preserves annotations and returns to the earlier chapter and scroll', () => {
+  const run=reader();
+  run(`window.requestAnimationFrame=()=>{};loadPrefs();state.book='JHN';state.chapter=3;pane.scrollTop=240;
+    state.bookmarks=[{book:'JHN',chapter:3,verse:16,ts:1}];state.comments={'JHN:3:16':'Keep this'};
+    window.saved=JSON.stringify([state.bookmarks,state.comments]);randomPassage=()=>({book:'GEN',ch:1,v:1});visitRandomPassage();`);
+  assert.equal(run('state.book'), 'GEN');
+  assert.equal(run('$("returnReading").hidden'), false);
+  run('backAction()()');
+  assert.equal(run('state.book'), 'JHN');
+  assert.equal(run('state.chapter'), 3);
+  assert.equal(run('pane.scrollTop'), 240);
+  assert.equal(run('JSON.stringify([state.bookmarks,state.comments])===saved'), true);
+});
+
+test('the Kallistos guide links to the original and the private import, and retains its parent', () => {
+  const run=reader();
+  run(`dialog.open=true;$('dialogTitle').textContent='Books & chapters';dialog.scrollTop=90;
+    window.filter={value:'Mark'};$('dialogBody').childNodes=[filter];
+    personalGuides=[{title:'How to Read the Bible',blocks:[{type:'paragraph',text:'Your private copy'}]}];
+    showEssay('kallistos-reading');`);
+  const html=run('$("dialogBody").innerHTML');
+  assert.ok(html.includes('https://www.oca.org/reflections/misc-authors/how-to-read-the-bible'));
+  assert.ok(html.includes('data-context-guide="0"'));
+  assert.ok(run('searchStudyContent("Kallistos","guides")').includes('data-essay="kallistos-reading"'));
+  run('dialogBack()');
+  assert.equal(run('$("dialogTitle").textContent'), 'Books & chapters');
+  assert.equal(run('$("dialogBody").childNodes[0].value'), 'Mark');
+  assert.equal(run('dialog.scrollTop'), 90);
+});
+
+test('PDF imports reject renamed HTML and oversized files before opening the renderer', async () => {
+  const run=reader();
+  await assert.rejects(run(`validateLibraryPdf(new Blob(['<script>alert(1)</script>'],{type:'application/pdf'}))`), /Choose a PDF file/);
+  await assert.rejects(run('validateLibraryPdf({size:51*1024*1024})'), /smaller than 50 MB/);
+  await run(`validateLibraryPdf(new Blob(['%PDF-1.4 QA test only']))`);
 });
 
 test('nested dialogs use their parent action before dismissing the overlay', () => {

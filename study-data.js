@@ -9,6 +9,22 @@ window.STUDY = {
   about: "Book introductions, a short guide on how to read Scripture in the Church, and verse notes on typology and the Fathers. These are original notes, not the copyrighted Orthodox Study Bible apparatus.",
 
   essays: {
+    "kallistos-reading": {
+      title: "How to read Scripture",
+      byline: "A summary of Metropolitan Kallistos Ware’s How to Read the Bible",
+      lead: "Kallistos invites us to approach Scripture with attention, within the Church, with Christ at its center, and with a willingness to be changed.",
+      personalGuideTitle: "How to Read the Bible",
+      source: {
+        url: "https://www.oca.org/reflections/misc-authors/how-to-read-the-bible",
+        label: "Read the full guide on OCA",
+      },
+      sections: [
+        { h: "Listen attentively", p: "Bring curiosity and openness. Notice the author, setting, and kind of writing, while remaining receptive to what God may be asking of you." },
+        { h: "Read with the Church", p: "Explore how a passage is heard in worship and understood by the Fathers. Discuss difficult questions with your parish rather than carrying them alone." },
+        { h: "Keep Christ at the center", p: "Look for connections across the Old and New Testaments and how they illuminate Christ’s life and work." },
+        { h: "Make it personal", p: "After understanding the passage in context, consider your own life: where might it invite repentance, generosity, patience, or hope?" },
+      ],
+    },
     "how-to-read": {
       kicker: "A rule of reading",
       title: "How to Read the Bible",

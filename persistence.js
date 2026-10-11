@@ -54,7 +54,7 @@ function validateBackup(value) {
   if (r.edition !== window.BIBLE.edition) throw new Error("This backup uses a different Bible edition. Keep the file and update the app before restoring it.");
   const isObject = x => x && typeof x === "object" && !Array.isArray(x);
   if (!bookMeta(r.book) || !Number.isInteger(r.chapter) || r.chapter < 1 || r.chapter > bookMeta(r.book).n ||
-      !["bible","wisdom","prayers","saved"].includes(r.tab) || !["light","dark"].includes(r.theme) ||
+      !["bible","wisdom","prayers","library","saved"].includes(r.tab) || !["light","dark"].includes(r.theme) ||
       !Number.isFinite(r.font) || r.font < 16 || r.font > 28 || !Number.isFinite(r.scroll) || r.scroll < 0 || r.scroll > 1 ||
       typeof r.showNotes !== "boolean" || typeof r.showPreamble !== "boolean" || !Array.isArray(r.bookmarks) ||
       !isObject(r.highlights) || !isObject(r.comments) || !Array.isArray(r.legacySaved)) fail();
@@ -185,7 +185,7 @@ async function updateStorageStatus() {
 }
 function showStorage(settingsSnapshot) {
   const parent = settingsSnapshot?.clone ? settingsSnapshot : captureSwipeView(dialog);
-  openDialog("Storage & backup", `<button class="text-button" id="storageBack">‹ Reading settings</button><div id="storageStatus" role="status" aria-live="polite"></div><div class="storage-actions"><button class="secondary" id="protectStorage">Protect device storage</button><button class="secondary" id="repairOffline">Repair offline download</button><button class="text-button" id="refreshStorage">Check again</button></div><h3 class="section-label">Your backup</h3><p class="helper">Includes your reading position, bookmarks, highlights, comments, settings, and imported OSB material. Save the file in Files or iCloud Drive to keep a copy outside this browser.</p><button class="primary" id="exportBackup">Back up my Bible</button><label class="text-button" for="restoreBackupFile">Choose a backup to restore</label><input id="restoreBackupFile" type="file" accept=".json,application/json"><button class="text-button" id="undoRestore" hidden>Undo the last restore</button>`);
+  openDialog("Storage & backup", `<button class="text-button" id="storageBack">‹ Reading settings</button><div id="storageStatus" role="status" aria-live="polite"></div><div class="storage-actions"><button class="secondary" id="protectStorage">Protect device storage</button><button class="secondary" id="repairOffline">Repair offline download</button><button class="text-button" id="refreshStorage">Check again</button></div><h3 class="section-label">Your backup</h3><p class="helper">Includes your reading position, bookmarks, highlights, comments, settings, and imported OSB material. Save the file in Files or iCloud Drive to keep a copy outside this browser. Library PDFs are exported separately from Library.</p><button class="primary" id="exportBackup">Back up my Bible</button><label class="text-button" for="restoreBackupFile">Choose a backup to restore</label><input id="restoreBackupFile" type="file" accept=".json,application/json"><button class="text-button" id="undoRestore" hidden>Undo the last restore</button>`);
   dialogBack = showSettings; dialogBackSnapshot = parent;
   $("storageBack").onclick = showSettings;
   $("exportBackup").onclick = exportBackup;

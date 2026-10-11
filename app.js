@@ -232,6 +232,7 @@ const icons = {
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
   bookmark: '<path d="M6 4h12v17l-6-4-6 4z"/>',
   book: '<path d="M12 5v15M3 4c4-1 7 0 9 2 2-2 5-3 9-2v15c-4-1-7 0-9 2-2-2-5-3-9-2z"/>',
+  library: '<path d="M4 4v16h4V4zM10 4v16h4V4zM17 4l4 15-4 1-4-15z"/>',
   settings:
     '<path d="M4 7h7m4 0h5M4 17h3m4 0h9"/><circle cx="13" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
   compass:
@@ -374,7 +375,7 @@ function loadPrefs(override) {
     }
   }
   if (["bookmarks", "marks"].includes(state.tab)) state.tab = "saved";
-  if (!["bible", "wisdom", "prayers", "saved"].includes(state.tab))
+  if (!["bible", "wisdom", "prayers", "library", "saved"].includes(state.tab))
     state.tab = "bible";
   state.theme = state.theme === "dark" ? "dark" : "light";
   if (typeof normalizeReaderTools === "function") normalizeReaderTools(state);
@@ -417,6 +418,7 @@ function openTab(tab) {
   if (tab === "bible") renderChapter(state.scroll);
   else if (tab === "wisdom") renderWisdom();
   else if (tab === "prayers") renderPrayers();
+  else if (tab === "library") renderLibrary();
   else renderSaved();
   persist();
 }
@@ -606,18 +608,25 @@ function renderSaved() {
   pane.scrollTop = 0;
 }
 function closeDialog() {
+  stopLibraryPdf();
   cancelBackSlide();
   searchGeneration++;
   if (dialog.open) dialog.close();
+  if (state.tab === "library" && !libraryLoading) {
+    const top = pane.scrollTop;
+    renderLibrary();
+    pane.scrollTop = top;
+  }
 }
 let dialogBack = null, dialogBackSnapshot = null, dialogRefresh = null;
 let wisdomBackSnapshot = null, prayerBackSnapshot = null;
 function openDialog(title, html, back = null) {
+  stopLibraryPdf();
   cancelBackSlide();
   dialogBackSnapshot = null;
   dialogBack = back;
   dialogRefresh = null;
-  dialog.classList.remove("chapter-drawer", "note-sheet");
+  dialog.classList.remove("chapter-drawer", "note-sheet", "library-reader");
   searchGeneration++;
   $("dialogTitle").textContent = title;
   $("dialogBody").innerHTML = html;
@@ -648,7 +657,7 @@ function captureDialogReturn() {
 function showBooks() {
   openDialog(
     "Books & chapters",
-    '<label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
+    '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button><button class="text-button" data-essay="kallistos-reading">How to read Scripture ›</button></div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
   );
   const render = () => {
     const query = $("bookFilter").value.trim().toLowerCase();
@@ -956,7 +965,7 @@ function showSettings() {
       )
       .join(
         "",
-      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Personal study notes</h3><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"><p class="helper">Choose your study-notes JSON file. It stays on this device.</p><h3 class="section-label">Reading guides</h3><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><br><button class="text-button" data-essay="how-to-read">How to read the Bible ›</button><br><button class="text-button" data-essay="typology">How Scripture speaks of Christ ›</button><p class="helper">Old Testament: LXX2012, Brenton’s Greek Septuagint translation with language updates. New Testament: World English Bible. Psalm numbers follow the Septuagint; source verse ranges and gaps are preserved. Imported OSB notes retain their original references, which have not all been aligned to LXX2012. Both Bible translations are public domain. <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012 source</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">WEB source</a>. Bookmarks, highlights, and comments are saved in this browser.</p>`,
+      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Personal study notes</h3><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"><p class="helper">Choose your study-notes JSON file. It stays on this device.</p><h3 class="section-label">Reading guides</h3><button class="text-button" data-essay="kallistos-reading">Kallistos Ware: how to read Scripture ›</button><br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><br><button class="text-button" data-essay="how-to-read">How to read the Bible ›</button><br><button class="text-button" data-essay="typology">How Scripture speaks of Christ ›</button><p class="helper">Old Testament: LXX2012, Brenton’s Greek Septuagint translation with language updates. New Testament: World English Bible. Psalm numbers follow the Septuagint; source verse ranges and gaps are preserved. Imported OSB notes retain their original references, which have not all been aligned to LXX2012. Both Bible translations are public domain. <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012 source</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">WEB source</a>. Bookmarks, highlights, and comments are saved in this browser.</p>`,
   );
   bindReaderToolsSettings();
   $("personalNotesFile").onchange = importPersonalNotes;
@@ -1003,9 +1012,11 @@ function showEssay(id) {
   if (!e) return;
   const parent = captureDialogReturn();
   const back = parent?.show || closeDialog;
+  const importedGuide = e.personalGuideTitle
+    ? personalGuides.findIndex(g => g.title.trim().toLocaleLowerCase() === e.personalGuideTitle.toLocaleLowerCase()) : -1;
   openDialog(
     e.title,
-    `<div class="essay"><button class="text-button" id="backSettings">‹ ${esc(parent?.title || "Back to reading")}</button><p>${esc(e.lead)}</p>${e.sections.map((s) => `<h3>${esc(s.h)}</h3><p>${esc(s.p)}</p>`).join("")}</div>`,
+    `<div class="essay"><button class="text-button" id="backSettings">‹ ${esc(parent?.title || (state.tab === "library" ? "Library" : "Back to reading"))}</button>${e.byline ? `<p class="helper essay-attribution">${esc(e.byline)}</p>` : ""}<p>${esc(e.lead)}</p>${e.sections.map((s) => `<h3>${esc(s.h)}</h3><p>${esc(s.p)}</p>`).join("")}${importedGuide >= 0 ? `<button class="text-button" data-context-guide="${importedGuide}">Read the full guide from your OSB copy ›</button>` : ""}${e.source ? `<p class="helper essay-source"><a href="${esc(e.source.url)}" target="_blank" rel="noopener noreferrer">${esc(e.source.label)} ↗</a> (online)</p>` : ""}</div>`,
   );
   dialogBack = parent ? back : null;
   dialogBackSnapshot = parent?.snapshot || null;
@@ -1014,6 +1025,7 @@ function showEssay(id) {
 function handleAction(event) {
   const button = event.target.closest("button");
   if (!button) return;
+  if (handleLibraryAction(button)) return;
   if (handleReaderToolAction(button)) return;
   if (button.dataset.contextLibrary) { showContextLibrary(); return; }
   if (button.dataset.contextGuide !== undefined) { showStudyContext("guide", button.dataset.contextGuide, button.dataset.contextParent); return; }
@@ -1114,6 +1126,9 @@ function returnToPrevious() {
   } else if (r.tab === "prayers") {
     selectTab("prayers");
     renderPrayers();
+  } else if (r.tab === "library") {
+    selectTab("library");
+    renderLibrary();
   } else {
     state.book = r.book;
     state.chapter = r.ch;
@@ -1185,8 +1200,10 @@ if (window.BIBLE?.t) {
   if (state.tab === "bible") renderChapter(state.scroll);
   else if (state.tab === "wisdom") renderWisdom();
   else if (state.tab === "prayers") renderPrayers();
+  else if (state.tab === "library") renderLibrary();
   else renderSaved();
   await restorePersonalNotes();
+  await restoreLibrary();
   document.querySelector(".app").inert = false;
   initializeCloudSync();
   if ("serviceWorker" in navigator)

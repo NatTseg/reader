@@ -1,6 +1,18 @@
 const READER_TOOL_DEFAULTS = {fontFamily:'serif', lineSpacing:1.85, paper:'original', history:[], readingPlan:null};
 let focusReading = false;
 let studyNoteParent = null;
+let randomPassageTargets;
+function randomPassage(random = Math.random) {
+  randomPassageTargets ||= bookOrder().flatMap(book => window.BIBLE.t[book].flatMap((chapter, i) =>
+    chapter.flatMap((text, v) => v > 0 && text ? [{book, ch: i + 1, v}] : [])));
+  return randomPassageTargets[Math.floor(random() * randomPassageTargets.length)];
+}
+function visitRandomPassage() {
+  const passage = randomPassage();
+  if (!passage) return;
+  visitPassage(passage.book, passage.ch, passage.v);
+  notify(`Random passage · ${refLabel(passage.book, passage.ch, passage.v)}`);
+}
 function normalizeReaderTools(reader) {
   reader.fontFamily=['serif','sans','book'].includes(reader.fontFamily)?reader.fontFamily:'serif';
   reader.lineSpacing=Number.isFinite(reader.lineSpacing)?Math.max(1.4,Math.min(2.4,reader.lineSpacing)):1.85;
@@ -123,7 +135,8 @@ function searchStudyContent(query,area) {
 }
 function handleReaderToolAction(button) {
   const d=button.dataset;
-  if(d.historyIndex!==undefined){const item={...state.history[+d.historyIndex]};goChapter(item.book,item.chapter);state.scroll=item.scroll;renderChapter(item.scroll);persist();}
+  if(d.randomPassage)visitRandomPassage();
+  else if(d.historyIndex!==undefined){const item={...state.history[+d.historyIndex]};goChapter(item.book,item.chapter);state.scroll=item.scroll;renderChapter(item.scroll);persist();}
   else if(d.startPlan){state.readingPlan={id:d.startPlan,completed:[]};persist();showReadingPlan(false,undefined,dialogBackSnapshot);}
   else if(d.choosePlan)showReadingPlan(true,undefined,dialogBackSnapshot);
   else if(d.planDay!==undefined)showReadingPlan(false,+d.planDay,dialogBackSnapshot);

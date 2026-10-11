@@ -4,7 +4,7 @@ Live: https://nattseg.github.io/reader/
 
 Publish the repository root from `main` using Settings → Pages → Deploy from a branch.
 
-Keep all root app assets together, including `persistence.js`, `reader-tools.js`, `note-alignment.js`, `cloud-config.js`, and `cloud-sync.js`. The complete offline asset list is in `sw.js`.
+Keep all root app assets together, including `persistence.js`, `reader-tools.js`, `library.js`, `note-alignment.js`, `cloud-config.js`, and `cloud-sync.js`, plus the `vendor/pdfjs` directory. The complete offline asset list is in `sw.js`.
 
 Open the Pages URL while connected, let the first download finish, then use your browser’s “Add to Home Screen” or “Install” command. After the service worker has cached the app, it works offline. Bookmarks, comments, highlights, and progress are stored in this browser.
 
