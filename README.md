@@ -29,7 +29,7 @@ Run `python3 -m http.server 8080` in this directory, then open http://localhost:
 
 See `GITHUB.md` for GitHub Pages and offline installation. Run regression checks with `node --test tests/*.test.cjs`.
 
-The app icon is the selected Jesus-with-halo outline. Its editable source is `icon.svg`; regenerate the phone and launcher PNGs with `python3 scripts/build_icons.py` (requires CairoSVG and Cairo; see the script for Homebrew library discovery).
+The app icon is the selected Jesus-with-halo outline. Its editable source is `icon.svg`; regenerate the phone and launcher PNGs with `python3 scripts/build_icons.py` (requires CairoSVG and Cairo; see the script for Homebrew library discovery). Inside the app, the header reads **Reader** and uses the separate fish mark in `fish.svg`.
 
 ## Text and numbering
 

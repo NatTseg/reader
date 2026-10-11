@@ -1,4 +1,4 @@
-const CACHE = "reader-v31";
+const CACHE = "reader-v32";
 const ASSETS = [
   "./",
   "./index.html",
@@ -19,6 +19,7 @@ const ASSETS = [
   "./wisdom-data.js",
   "./manifest.webmanifest",
   "./icon.svg",
+  "./fish.svg",
   "./apple-touch-icon.png",
   "./icon-512.png",
   "./icon-maskable-512.png",
