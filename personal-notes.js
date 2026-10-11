@@ -6,7 +6,7 @@ let personalGuides = [], personalIntroductions = {};
 let personalAlignment = null;
 function validatePersonalNotes(data) {
   if (!data || typeof data.notes !== "object" || !data.notes || Array.isArray(data.notes))
-    throw new Error("Choose a valid orthobible study-notes JSON file.");
+    throw new Error("Choose a valid study-notes JSON file.");
   const notes = {}, preambles = {};
   for (const [key, note] of Object.entries(data.notes)) {
     const match = key.match(/^([A-Z0-9]{3}):(\d+):(\d+)$/);

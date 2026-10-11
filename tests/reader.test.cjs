@@ -126,7 +126,7 @@ test("invalid persisted data cannot break reader preferences", () => {
   assert.equal(run("state.font"), 28);
   assert.equal(run("state.bookmarks.length"), 0);
 });
-test("activation deletes only old orthobible caches", async () => {
+test("activation deletes only old reader and legacy app caches", async () => {
   const handlers = {},
     deleted = [];
   let job;
@@ -140,6 +140,9 @@ test("activation deletes only old orthobible caches", async () => {
     caches: {
       keys: async () => [
         "unrelated-app-v1",
+        "reader-glossary-v1",
+        "reader-v30",
+        "reader-v31",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -160,7 +163,7 @@ test("activation deletes only old orthobible caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29"]);
+  assert.deepEqual(deleted, ["reader-v30", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -174,7 +177,7 @@ test("offline HTML fallback is reserved for navigation within this app", async (
         handlers[name] = fn;
       },
       location: { origin: "https://example.com" },
-      registration: { scope: "https://example.com/orthobible/" },
+      registration: { scope: "https://example.com/reader/" },
     },
     caches: {
       open: async () => ({
@@ -201,11 +204,11 @@ test("offline HTML fallback is reserved for navigation within this app", async (
     return response;
   };
   assert.equal(
-    await fire("https://example.com/orthobible/unknown", "navigate"),
+    await fire("https://example.com/reader/unknown", "navigate"),
     fallback,
   );
   assert.equal(
-    (await fire("https://example.com/orthobible/missing.js", "cors")).type,
+    (await fire("https://example.com/reader/missing.js", "cors")).type,
     "error",
   );
   assert.equal(fire("https://example.com/OtherApp/", "navigate"), undefined);

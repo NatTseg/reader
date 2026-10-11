@@ -1,6 +1,6 @@
-# orthobible
+# reader
 
-Live: https://nattseg.github.io/orthobible/
+Live: https://nattseg.github.io/reader/
 
 A simple, offline Scripture reader. LXX2012 Septuagint Old Testament with the World English Bible New Testament, original study notes, bookmarks, highlights, comments, and passages for everyday life.
 
@@ -8,7 +8,7 @@ A simple, offline Scripture reader. LXX2012 Septuagint Old Testament with the Wo
 - **Search:** enter a reference such as John 3:16 or a phrase such as “love one another.”
 - **Wisdom:** browse passages by topic.
 - **Prayers:** a simple prayer book with eight prayers and Psalm text, available offline.
-- **Personal study notes:** import your `orthobible-study-notes.json` in Reading settings to store your notes and introductions on this device for offline use. New Testament notes link from verses. Original Old Testament notes remain accessible below chapters in a reference browser; their alignment with LXX2012 is explicitly unverified.
+- **Personal study notes:** import your `reader-study-notes.json` in Reading settings to store your notes and introductions on this device for offline use. New Testament notes link from verses. Original Old Testament notes remain accessible below chapters in a reference browser; their alignment with LXX2012 is explicitly unverified.
 - **OSB reading context:** the updated personal import adds the complete introductions to all 76 OSB books and ten guides, including How to Read the Bible, the book overview, glossary, and lectionary. Open a book’s introduction above its verses, or browse Reading settings → OSB guides & book introductions. The five separately displayed additions use their parent book’s introduction; 4 Maccabees has no OSB introduction. The guides retain the source edition’s references and ebook navigation instructions.
 - **Saved:** filter your bookmarks, highlights, and comments.
 - **Go back:** drag right from a prayer, Wisdom topic, reading guide, book picker, or linked passage. The current view slides with your finger and reveals its parent. Release beyond roughly one third of the view to go back; a short drag, reversal, or touch cancellation restores the current view.
@@ -29,6 +29,8 @@ Run `python3 -m http.server 8080` in this directory, then open http://localhost:
 
 See `GITHUB.md` for GitHub Pages and offline installation. Run regression checks with `node --test tests/*.test.cjs`.
 
+The app icon is the selected Jesus-with-halo outline. Its editable source is `icon.svg`; regenerate the phone and launcher PNGs with `python3 scripts/build_icons.py` (requires CairoSVG and Cairo; see the script for Homebrew library discovery).
+
 ## Text and numbering
 
 - Old Testament: [LXX2012](https://ebible.org/eng-lxx2012/), Brenton’s Greek Septuagint translation with language updates by Michael Paul Johnson; public domain.
@@ -40,6 +42,6 @@ See `GITHUB.md` for GitHub Pages and offline installation. Run regression checks
 
 Rebuild with `python3 scripts/build_septuagint.py /path/to/eng-lxx2012_vpl.zip`. The source URL, SHA-256, and counts are recorded in `data/lxx2012-source.json`. The script takes the unchanged WEB NT and migration archive from commit `b42fa0d`.
 
-To rebuild a private context import from the owner’s extracted MOBI HTML, run `python3 scripts/build_personal_context.py /path/to/book.html /path/to/orthobible-study-notes.json /path/outside/repo/orthobible-osb-context.json` (requires BeautifulSoup). The resulting JSON includes the existing notes unchanged and stays outside the published repository. Import it on each reading device; IndexedDB persists it independently of app cache updates. Older notes-only imports remain supported.
+To rebuild a private context import from the owner’s extracted MOBI HTML, run `python3 scripts/build_personal_context.py /path/to/book.html /path/to/reader-study-notes.json /path/outside/repo/reader-osb-context.json` (requires BeautifulSoup). The resulting JSON includes the existing notes unchanged and stays outside the published repository. Import it on each reading device; IndexedDB persists it independently of app cache updates. Older notes-only imports remain supported.
 
-For source-linked notes, run `python3 scripts/align_personal_notes.py /path/to/book.html /path/to/orthobible-osb-context.json /path/outside/repo/orthobible-osb-complete.json`. This preserves the earlier notes and adds source verse text, conservative text matches, and review candidates. Only close, distinctive matches are attached automatically; unmatched notes remain browsable and can be linked after comparing both verses in the app. Text matching is not a scholarly verification of every verse. Output and the alignment review report contain private copyrighted material and must stay outside this repository.
+For source-linked notes, run `python3 scripts/align_personal_notes.py /path/to/book.html /path/to/reader-osb-context.json /path/outside/repo/reader-osb-complete.json`. This preserves the earlier notes and adds source verse text, conservative text matches, and review candidates. Only close, distinctive matches are attached automatically; unmatched notes remain browsable and can be linked after comparing both verses in the app. Text matching is not a scholarly verification of every verse. Output and the alignment review report contain private copyrighted material and must stay outside this repository.

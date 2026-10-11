@@ -1,6 +1,6 @@
 {
-  "name": "Orthodox Bible",
-  "short_name": "OrthoBible",
+  "name": "reader",
+  "short_name": "reader",
   "description": "Offline Scripture: Septuagint Old Testament and World English Bible New Testament, with personal study notes and saved verses.",
   "start_url": "./index.html",
   "scope": "./",
@@ -24,7 +24,13 @@
       "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "id": "./"

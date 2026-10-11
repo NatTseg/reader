@@ -7,10 +7,11 @@ function studyRead(key) {
 }
 function studyTransaction(values, readKey) {
   return new Promise((resolve, reject) => {
+    // Keep the legacy database name so the new Pages path reuses existing notes.
     const request = indexedDB.open("orthobible-personal", 1);
     request.onupgradeneeded = () => request.result.createObjectStore("study");
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("Close other orthobible tabs and try again."));
+    request.onblocked = () => reject(new Error("Close other reader tabs and try again."));
     request.onsuccess = () => {
       const db = request.result;
       db.onversionchange = () => db.close();
@@ -45,7 +46,8 @@ function backupReader(source) {
   return JSON.parse(JSON.stringify(Object.fromEntries(fields.filter(key => source[key] !== undefined).map(key => [key, source[key]]))));
 }
 function validateBackup(value) {
-  const fail = () => { throw new Error("Choose a complete orthobible backup file. Study-note imports belong in Import study notes."); };
+  const fail = () => { throw new Error("Choose a complete reader backup file. Study-note imports belong in Import study notes."); };
+  // The format identifier stays compatible with backups made before the rename.
   if (!value || value.format !== "orthobible-backup" || value.version !== 1 || !value.reader || !Object.hasOwn(value, "personal")) fail();
   const r = backupReader(value.reader);
   if (typeof normalizeReaderTools === "function") normalizeReaderTools(r);
@@ -90,7 +92,7 @@ async function exportBackup() {
   try {
     const data = await createBackup();
     const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
-    const filename = `orthobible-backup-${new Date().toISOString().slice(0,10)}.json`;
+    const filename = `reader-backup-${new Date().toISOString().slice(0,10)}.json`;
     const url = URL.createObjectURL(blob), link = document.createElement("a");
     link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);

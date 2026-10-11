@@ -1,6 +1,6 @@
 # GitHub Pages and offline installation
 
-Live: https://nattseg.github.io/orthobible/
+Live: https://nattseg.github.io/reader/
 
 Publish the repository root from `main` using Settings → Pages → Deploy from a branch.
 
@@ -10,15 +10,15 @@ Open the Pages URL while connected, let the first download finish, then use your
 
 When changing app files, increment the cache version in `sw.js` so installed readers receive the new assets. Close and reopen the app after an update to use the new version. Do not clear site data to update: that also erases saved verses.
 
-After the lowercase repository rename, open the new URL online once to cache it for offline reading. Existing saved verses and preferences use the same browser storage keys on the same GitHub Pages origin. If a Home Screen shortcut still points to `/OrthoBible/`, add the new address to your Home Screen. Keep site data when updating.
+After the repository rename to reader, open the new URL online once to cache it for offline reading. Existing saved verses, preferences, and imported notes use the same storage keys on the same GitHub Pages origin. If a Home Screen shortcut still points to the previous address, add the new address to update its name and icon. Keep site data when updating.
 
 ## Personal study notes on your phone
 
-Transfer `orthobible-study-notes.json` from your Mac to Files on your phone (for example, with AirDrop). Open the installed orthobible app, choose Reading settings → Import study notes, and select that file. Wait for the imported note count, then open a chapter. The file is stored in this device’s IndexedDB and is available after offline reloads; app-cache updates do not delete it. Import in the browser or Home Screen app you intend to use, since storage can be separate. Keep the notes file as a backup: clearing browser/site data or removing an app can remove its local data.
+Transfer your study-notes JSON file from your Mac to Files on your phone (for example, with AirDrop). Open the installed reader app, choose Reading settings → Import study notes, and select that file. Wait for the imported note count, then open a chapter. The file is stored in this device’s IndexedDB and is available after offline reloads; app-cache updates do not delete it. Import in the browser or Home Screen app you intend to use, since storage can be separate. Keep the notes file as a backup: clearing browser/site data or removing an app can remove its local data.
 
 The existing extracted note references are preserved. The reader uses LXX2012 for the Old Testament and WEB for the New Testament. Imported OT notes can be read from the notes section below each chapter, using their original reference numbers; they are not automatically attached to LXX2012 verses. Importing notes does not replace the Bible text with the printed OSB translation.
 
-The newer `orthobible-osb-complete.json` import also supplies conservatively matched source-note links. Unmatched notes remain accessible through Browse all OSB source notes, where Review verse link lets you compare the original and reader text before attaching a note. Earlier notes remain in their own archive.
+The newer `reader-osb-complete.json` import also supplies conservatively matched source-note links. Unmatched notes remain accessible through Browse all OSB source notes, where Review verse link lets you compare the original and reader text before attaching a note. Earlier notes remain in their own archive.
 
 ## Persistence on iPhone
 

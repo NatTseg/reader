@@ -1,4 +1,4 @@
-const CACHE = "orthodox-bible-v30";
+const CACHE = "reader-v31";
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,6 +21,7 @@ const ASSETS = [
   "./icon.svg",
   "./apple-touch-icon.png",
   "./icon-512.png",
+  "./icon-maskable-512.png",
 ];
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -39,7 +40,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith("orthodox-bible-") && key !== CACHE)
+            .filter((key) => /^(?:reader|orthodox-bible)-v\d+$/.test(key) && key !== CACHE)
             .map((key) => caches.delete(key)),
         ),
       )
