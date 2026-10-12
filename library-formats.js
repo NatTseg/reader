@@ -4,13 +4,20 @@ function libraryPdfBlocks(content) {
   const lines = [];
   let line;
   for (const item of content.items || []) {
-    if (typeof item.str !== "string" || !item.str.trim()) continue;
+    if (typeof item.str !== "string") continue;
+    if (!item.str.trim()) {
+      if (line && item.str) line.text += " ";
+      if (item.hasEOL) line = null;
+      continue;
+    }
     const size = Math.abs(item.transform?.[3] || item.height || 12);
     const x = item.transform?.[4] || 0, y = item.transform?.[5] || 0;
     if (!line || Math.abs(y - line.y) > size * .3) {
       line = {text: "", x, y, size}; lines.push(line);
     }
-    line.text += (line.text && !/\s$/.test(line.text) && !/^\s|^[,.;:!?)]/.test(item.str) ? " " : "") + item.str;
+    const spaced = line.right === undefined || x - line.right > Math.max(1, size * .15);
+    line.text += (line.text && spaced && !/\s$/.test(line.text) && !/^\s|^[,.;:!?)]/.test(item.str) ? " " : "") + item.str;
+    line.right = Number.isFinite(item.width) ? x + item.width : undefined;
     line.size = Math.max(line.size, size);
     if (item.hasEOL) line = null;
   }
@@ -35,6 +42,31 @@ function libraryPdfBlocks(content) {
 }
 function libraryBlocksHtml(blocks) {
   return blocks.map(b => b.kind === "heading" ? `<h3>${esc(b.text)}</h3>` : `<p>${esc(b.text)}</p>`).join("");
+}
+function libraryPdfCanvasSize(width, height, ratio = 1) {
+  // Bound raster memory on phones, including unusually tall scanned pages.
+  const scale = Math.min(Math.max(.1, ratio || 1), 2, Math.sqrt(8_000_000 / (width * height)), 8192 / width, 8192 / height);
+  return {width: Math.max(1, Math.floor(width * scale)), height: Math.max(1, Math.floor(height * scale)), scale};
+}
+function libraryFindTextMatch(runs, query) {
+  const needle = query.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  if (!needle) return null;
+  let text = ""; const offsets = [];
+  for (const [index, run] of runs.entries()) {
+    if (run.gap && text && !text.endsWith(" ")) { text += " "; offsets.push(null); }
+    let offset = 0;
+    for (const character of run.text) {
+      const normalized = /\s/.test(character) ? " " : character.toLocaleLowerCase();
+      if (normalized !== " " || !text.endsWith(" ")) {
+        text += normalized;
+        for (let n = 0; n < normalized.length; n++) offsets.push({index, offset, end: offset + character.length});
+      }
+      offset += character.length;
+    }
+  }
+  const found = text.indexOf(needle);
+  if (found < 0) return null;
+  return {start: offsets[found], end: offsets[found + needle.length - 1]};
 }
 function libraryZipEntries(bytes, limit = 100 * 1024 * 1024, entryLimit = 20 * 1024 * 1024) {
   let total = 0, count = 0;

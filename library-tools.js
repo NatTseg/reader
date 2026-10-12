@@ -5,13 +5,26 @@ function closeLibraryTool(session = activeLibraryPdf, restoreScroll = true) {
   session.tools = null;
   $("libraryToolPanel").hidden = true; $("libraryReadingArea").hidden = false;
   for (const button of dialog.querySelectorAll("[data-library-tool]")) button.setAttribute("aria-pressed","false");
-  if (restoreScroll) dialog.scrollTop=(session.scroll || 0)*Math.max(0,dialog.scrollHeight-dialog.clientHeight);
+  if (restoreScroll) {
+    if(session.pausedRender) {
+      const request=session.pausedRender;session.pausedRender=null;
+      return renderLibraryPdfPage(session,request.page,request.options);
+    }
+    dialog.scrollTop=(session.scroll || 0)*Math.max(0,dialog.scrollHeight-dialog.clientHeight);
+  }
 }
 async function showLibraryTool(kind) {
   const session=activeLibraryPdf;
-  if (!session?.ready) {notify("Wait for the book to open.");return;}
+  if (!session || !session.pdf && !session.epub) {notify("Wait for the book to open.");return;}
+  if(session.pendingPage) {
+    session.pausedRender={page:session.pendingPage,options:{...session.pendingOptions,view:session.pendingView}};
+    session.version++;session.renderTask?.cancel();session.renderTask=null;
+    session.pendingPage=null;session.pendingView=null;session.pendingOptions=null;
+    session.ready=!!session.frameReady;
+    $("libraryReadingArea").setAttribute("aria-busy","false");updateLibraryPdfControls(session);
+  }
   if (kind === "notes") session.selectedQuote = librarySelectedText();
-  if (!session.tools) {session.scroll=libraryScrollPosition();saveLibraryPosition(session);}
+  if (!session.tools && session.frameReady) {session.scroll=libraryScrollPosition();saveLibraryPosition(session);}
   session.tools=kind; session.searchVersion=(session.searchVersion || 0)+1;
   $("libraryReadingArea").hidden=true; const panel=$("libraryToolPanel");panel.hidden=false;
   for(const button of dialog.querySelectorAll("[data-library-tool]"))button.setAttribute("aria-pressed",String(button.dataset.libraryTool===kind));
@@ -55,6 +68,7 @@ function showLibrarySearch(session) {
   $("librarySearchInput").focus({preventScroll:true});
 }
 function librarySearchSnippet(text, query) {
+  text=text.replace(/\s+/g," ");query=query.trim().replace(/\s+/g," ");
   const index=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
   if(index<0)return null;
   const start=Math.max(0,index-65),end=Math.min(text.length,index+query.length+100);
@@ -98,18 +112,25 @@ function jumpLibraryLocation(page, anchor="", scroll=0, query="") {
 function highlightLibraryMatch(query) {
   if (!query) return;
   const walker=document.createTreeWalker($("libraryPdfText"),NodeFilter.SHOW_TEXT);
-  let node;
+  const nodes=[],runs=[];let node,previousBlock;
   while ((node=walker.nextNode())) {
-    const index=node.textContent.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-    if(index<0)continue;
-    const match=node.splitText(index);match.splitText(query.length);
-    const mark=document.createElement("mark");mark.className="library-search-hit";match.replaceWith(mark);mark.append(match);
-    mark.scrollIntoView({block:"center"});return;
+    const block=node.parentElement?.closest("p,h1,h2,h3,h4,h5,h6,li,blockquote,div,td,th");
+    nodes.push(node);runs.push({text:node.textContent,gap:!!previousBlock && previousBlock!==block});previousBlock=block;
   }
+  const found=libraryFindTextMatch(runs,query);if(!found)return;
+  let first;
+  for(let index=found.start.index;index<=found.end.index;index++) {
+    const node=nodes[index],start=index===found.start.index ? found.start.offset : 0;
+    const end=index===found.end.index ? found.end.end : node.textContent.length;
+    if(end<=start)continue;
+    const match=node.splitText(start);match.splitText(end-start);
+    const mark=document.createElement("mark");mark.className="library-search-hit";match.replaceWith(mark);mark.append(match);first ||= mark;
+  }
+  first?.scrollIntoView({block:"center"});
 }
 function librarySelectedText() {
   const selection=window.getSelection?.(),area=$("libraryPdfText");
-  return selection && area.contains(selection.anchorNode) && area.contains(selection.focusNode) ? selection.toString().trim().slice(0,5000) : "";
+  return selection && !area.hidden && area.contains(selection.anchorNode) && area.contains(selection.focusNode) ? selection.toString().trim().slice(0,5000) : "";
 }
 function showLibraryMarks(session, editing) {
   // A selection is captured before the reading area is hidden by the tool panel.

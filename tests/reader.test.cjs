@@ -151,7 +151,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v30",
         "reader-v31",
         "reader-v32",
-        "reader-v34",
+        "reader-v35",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -872,4 +872,192 @@ test('backup export detects a damaged stored original instead of producing an un
   run(`pdfBytes[0]=0;window.damagedFile=new File([pdfBytes],book.filename,{type:'application/pdf'});snapshotLibrary=async()=>({books:[book],files:{[book.id]:damagedFile}});`);
   await assert.rejects(run('createReaderArchive()'),/saved file.*damaged/);
   assert.equal(run('libraryBooks[0].marks[0].note'),'My reflection');
+});
+
+test('PDF text joins adjacent glyph fragments and preserves actual word gaps', () => {
+  const run=reader();
+  run(`window.fragments={items:[
+    {str:'spi',width:15,transform:[12,0,0,12,40,700]},
+    {str:'ritual',width:30,transform:[12,0,0,12,55,700]},
+    {str:'growth',width:35,transform:[12,0,0,12,90,700],hasEOL:true}
+  ]};`);
+  assert.equal(run('libraryPdfBlocks(fragments)[0].text'),'spiritual growth');
+});
+
+test('PDF canvas sizing preserves page proportions and limits raster memory on phones', () => {
+  const run=reader();
+  assert.equal(run('JSON.stringify(libraryPdfCanvasSize(300,450,2))'),JSON.stringify({width:600,height:900,scale:2}));
+  assert.ok(run('libraryPdfCanvasSize(1000,100000,3).width * libraryPdfCanvasSize(1000,100000,3).height <= 8000000'));
+  assert.ok(run('libraryPdfCanvasSize(1000,100000,3).height <= 8192'));
+});
+
+test('phone overscroll cannot put invalid scroll fractions into library backups', () => {
+  const run=reader();
+  run('dialog.scrollHeight=1000;dialog.clientHeight=500;dialog.scrollTop=-40;');
+  assert.equal(run('libraryScrollPosition()'),0);
+  run('dialog.scrollTop=540;');
+  assert.equal(run('libraryScrollPosition()'),1);
+});
+
+test('book search highlights span inline elements and paragraph breaks', () => {
+  const run=reader();
+  assert.equal(run(`JSON.stringify(libraryFindTextMatch([{text:'A quiet '},{text:'prayer'},{text:' and reflection.'}], 'quiet prayer'))`),
+    JSON.stringify({start:{index:0,offset:2,end:3},end:{index:1,offset:5,end:6}}));
+  assert.equal(run(`JSON.stringify(libraryFindTextMatch([{text:'prayer'},{text:'and reflection',gap:true}], 'prayer and'))`),
+    JSON.stringify({start:{index:0,offset:0,end:1},end:{index:1,offset:2,end:3}}));
+  assert.equal(run(`libraryFindTextMatch([{text:'no matching words'}],'prayer')`),null);
+});
+
+function pdfRenderSession(run,view='text') {
+  run(`loadPrefs();window.savedPositions=[];saveLibraryPosition=async s=>savedPositions.push({page:s.page,view:s.view,scroll:s.scroll});
+    dialog.scrollTop=400;dialog.scrollHeight=2000;dialog.clientHeight=500;
+    for(const id of ['libraryReadingArea','libraryPdfTextView','libraryPdfPageView','libraryPdfCanvas'])$(id).setAttribute=()=>{};
+    $('libraryPdfCanvas').replaceWith=()=>{};
+    window.pageFor=n=>({pageNumber:n,cleanup(){},getTextContent:async()=>({items:[{str:'Read with attention and prayer.',transform:[12,0,0,12,40,700],hasEOL:true}]})});
+    window.session={book:{id:'test-book',title:'Test',pages:24},page:14,view:${JSON.stringify(view)},displayView:${JSON.stringify(view)},
+      scroll:.2,version:0,ready:true,frameReady:true,urls:[],textCache:new Map(),blocksCache:new Map(),pdf:{numPages:24,getPage:async n=>pageFor(n)}};
+    activeLibraryPdf=session;
+    renderLibraryCanvas=(s,p)=>({canvas:{width:350,height:500},width:350,task:{promise:Promise.resolve(),cancel(){}}});`);
+}
+
+test('changing book display while a page is loading retains the requested page', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`session.ready=false;session.pendingPage=20;session.pendingOptions={scroll:.4,query:'prayer'};
+    renderLibraryPdfPage=async(s,n,options)=>{window.changed={page:n,options};};`);
+  await run('changeLibraryPdfView(session,"page")');
+  assert.equal(run('changed.page'),20);
+  assert.equal(run('changed.options.view'),'page');
+  assert.equal(run('changed.options.scroll'),.4);
+  assert.equal(run('changed.options.query'),undefined);
+});
+
+test('refreshing the same PDF page preserves the current reading position', async () => {
+  const run=reader();pdfRenderSession(run);
+  await run('renderLibraryPdfPage(session,14)');
+  assert.equal(run('session.page'),14);
+  assert.equal(run('session.scroll'),400/1500);
+  assert.equal(run('dialog.scrollTop'),400);
+});
+
+test('Page view is independent of PDF text extraction', async () => {
+  const run=reader();pdfRenderSession(run,'page');
+  run(`window.textReads=0;session.pdf.getPage=async n=>({...pageFor(n),getTextContent:async()=>{textReads++;throw new Error('Text unavailable');}});`);
+  await run('renderLibraryPdfPage(session,15)');
+  assert.equal(run('textReads'),0);
+  assert.equal(run('session.page'),15);
+  assert.equal(run('session.displayView'),'page');
+  assert.equal(run('session.ready'),true);
+});
+
+test('unreadable PDF text falls back to the original page without trapping navigation', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`session.pdf.getPage=async n=>({...pageFor(n),getTextContent:async()=>{throw new Error('Text unavailable');}});`);
+  await run('renderLibraryPdfPage(session,15)');
+  assert.equal(run('session.page'),15);
+  assert.equal(run('session.displayView'),'page');
+  assert.equal(run('session.ready'),true);
+  assert.equal(run('$("libraryPdfNext").disabled'),false);
+});
+
+test('a failed PDF raster falls back to selectable text', async () => {
+  const run=reader();pdfRenderSession(run,'page');
+  run(`renderLibraryCanvas=()=>{throw new Error('Canvas failed');};`);
+  await run('renderLibraryPdfPage(session,15)');
+  assert.equal(run('session.displayView'),'text');
+  assert.equal(run('session.ready'),true);
+  assert.match(run('$("libraryPdfText").innerHTML'),/attention and prayer/);
+});
+
+test('a failed PDF page keeps the previous page readable and offers a working retry', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`window.fail=true;session.pdf.getPage=async n=>{if(fail)throw new Error('Page failed');return pageFor(n);};$('libraryPdfText').innerHTML='<p>Previous page</p>';`);
+  await run('renderLibraryPdfPage(session,15)');
+  assert.equal(run('session.page'),14);
+  assert.equal(run('session.ready'),true);
+  assert.equal(run('$("libraryPdfPrevious").disabled'),false);
+  assert.equal(run('$("libraryPdfNext").disabled'),false);
+  assert.equal(run('$("libraryPdfError").hidden'),false);
+  assert.equal(run('$("libraryPdfText").innerHTML'),'<p>Previous page</p>');
+  run('fail=false;');
+  await run('$("libraryPdfRetry").onclick()');
+  assert.equal(run('session.page'),15);
+  assert.equal(run('$("libraryPdfError").hidden'),true);
+});
+
+test('PDF search results switch Page view to readable highlighted text', async () => {
+  const run=reader();pdfRenderSession(run,'page');
+  run('highlightLibraryMatch=query=>{window.highlighted=query;};');
+  await run('renderLibraryPdfPage(session,15,{query:"prayer"})');
+  assert.equal(run('session.view'),'text');
+  assert.equal(run('session.displayView'),'text');
+  assert.equal(run('highlighted'),'prayer');
+});
+
+test('late PDF text results cannot overwrite a newer page or its saved position', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`window.releaseText;window.slowText=new Promise(resolve=>releaseText=resolve);
+    session.pdf.getPage=async n=>n===15 ? {...pageFor(n),getTextContent:()=>slowText} : pageFor(n);
+    window.firstRender=renderLibraryPdfPage(session,15);`);
+  await run('Promise.resolve().then(()=>Promise.resolve())');
+  await run('renderLibraryPdfPage(session,16)');
+  run(`releaseText({items:[{str:'Stale page text',transform:[12,0,0,12,40,700]}]});`);
+  await run('firstRender');
+  assert.equal(run('session.page'),16);
+  assert.equal(run('$("libraryPdfPage").value'),16);
+  assert.equal(run('$("libraryPdfText").innerHTML.includes("Stale")'),false);
+  assert.equal(run('savedPositions.some(p=>p.page===15)'),false);
+});
+
+test('reopening a PDF waits for its pending saved position', async () => {
+  const run=reader();
+  run(`loadPrefs();window.releaseSave;librarySaveQueue=new Promise(resolve=>releaseSave=resolve);
+    libraryBooks=[{id:'test-book',title:'Test',page:14,pages:24,view:'text'}];
+    openDialog=()=>{};libraryTransaction=async()=>new Blob(['PDF test']);pdfOptions=buffer=>({data:buffer});
+    pdfRenderer=async()=>({getDocument:()=>({promise:Promise.resolve({numPages:24})})});
+    renderLibraryPdfPage=async(s,page)=>{window.openedPage=page;};
+    window.reopening=showLibraryPdf('test-book',undefined,null);`);
+  assert.equal(run('window.openedPage'),undefined);
+  run('libraryBooks[0].page=15;releaseSave();');
+  await run('reopening');
+  assert.equal(run('openedPage'),15);
+});
+
+test('closing a PDF during rendering cancels work without saving an unseen page', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`window.rejectPaint;window.paint=new Promise((resolve,reject)=>rejectPaint=reject);
+    renderLibraryCanvas=()=>{const task={promise:paint,cancel(){rejectPaint(Object.assign(new Error('Cancelled'),{name:'RenderingCancelledException'}));}};session.renderTask=task;return {canvas:{width:350,height:500},width:350,task};};
+    window.rendering=renderLibraryPdfPage(session,15,{view:'page'});`);
+  await run('Promise.resolve().then(()=>Promise.resolve())');
+  run('stopLibraryPdf();');
+  await run('rendering');
+  assert.equal(run('activeLibraryPdf'),null);
+  assert.equal(run('savedPositions.some(p=>p.page===15)'),false);
+});
+
+test('stalled PDF work times out and cancels rendering instead of leaving the reader stuck', async () => {
+  const run=reader();run('window.cancelled=false;');
+  await assert.rejects(run(`libraryPdfWork(new Promise(()=>{}),'Rendering timed out',()=>cancelled=true,5)`),/Rendering timed out/);
+  assert.equal(run('cancelled'),true);
+  assert.equal(await run(`libraryPdfWork(Promise.resolve('done'),'Unexpected timeout',undefined,5)`),'done');
+});
+
+test('book tools can pause a slow first page and resume it when returning to reading', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`session.ready=false;session.frameReady=false;session.pendingPage=20;session.pendingView='page';session.pendingOptions={scroll:.4};
+    window.cancelled=false;session.renderTask={cancel:()=>cancelled=true};
+    showLibraryContents=async()=>{};`);
+  await run('showLibraryTool("contents")');
+  assert.equal(run('cancelled'),true);
+  assert.equal(run('session.tools'),'contents');
+  assert.equal(run('session.pausedRender.page'),20);
+  run('renderLibraryPdfPage=async(s,page,options)=>{window.resumed={page,options};};');
+  await run('closeLibraryTool(session)');
+  assert.equal(run('resumed.page'),20);
+  assert.equal(run('resumed.options.view'),'page');
+  assert.equal(run('resumed.options.scroll'),.4);
+});
+
+test('book search tolerates spacing differences in extracted PDF text', () => {
+  const run=reader();
+  assert.equal(run(`librarySearchSnippet('Prayer  and\\nreflection','prayer and reflection')`),'Prayer and reflection');
 });

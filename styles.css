@@ -655,6 +655,8 @@ textarea {
 .library-search-hit { background: var(--soft); color: var(--text); outline: 1px solid var(--accent); border-radius: 3px; }
 #restoreReaderArchiveFile { margin-top: 8px; }
 .library-pdf-page { max-width: 100%; background: white; }
+.library-pdf-error { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin: 12px 0; }
+.library-pdf-error p { margin: 0 0 10px; }
 dialog.library-reader { width: 800px; }
 .tabs { gap: clamp(0px, 3vw, 28px); }
 .tabs button { flex: 1; min-width: 0; padding-left: 8px; padding-right: 8px; }

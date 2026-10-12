@@ -7,7 +7,7 @@ const LIBRARY_FEATURED = [{
   edition: "English · COPT, 1998 · 211 PDF pages",
 }];
 let libraryBooks = [], libraryLoading = true, libraryError = "", libraryBusy = false;
-let activeLibraryPdf = null, pdfRendererPromise, librarySaveQueue = Promise.resolve();
+let activeLibraryPdf = null, pdfRendererPromise, librarySaveQueue = Promise.resolve(), libraryOpenVersion = 0;
 function libraryDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("reader-library", 2);
@@ -142,16 +142,23 @@ function updateLibraryBook(id, change) {
     const previous = libraryBooks.find(b => b.id === id); if (!previous) throw new Error("This book is no longer in Library.");
     const book = {...previous,...(typeof change === "function" ? change(previous) : change)};
     await libraryTransaction(["catalog"],"readwrite",tx => tx.objectStore("catalog").put(book));
-    libraryBooks = libraryBooks.map(b => b.id === id ? book : b); return book;
+    libraryBooks = libraryBooks.map(b => b.id === id ? book : b);
+    if(state.tab==="library" && !dialog.open && !libraryLoading) {
+      const top=pane.scrollTop;renderLibrary();pane.scrollTop=top;
+    }
+    return book;
   });
   librarySaveQueue = result.catch(() => {}); return result;
 }
-function libraryScrollPosition() { return dialog.scrollTop / Math.max(1,dialog.scrollHeight-dialog.clientHeight); }
+function libraryScrollPosition() {
+  const maximum = Math.max(1, (Number(dialog.scrollHeight) || 0) - (Number(dialog.clientHeight) || 0));
+  return Math.max(0, Math.min(1, (Number(dialog.scrollTop) || 0) / maximum));
+}
 function stopLibraryPdf() {
   const session = activeLibraryPdf;
   if (!session) return;
   clearTimeout(session.scrollTimer);
-  if (session.ready) {
+  if (session.frameReady || session.ready) {
     if (!session.tools) session.scroll = libraryScrollPosition();
     saveLibraryPosition(session);
   }
@@ -159,14 +166,17 @@ function stopLibraryPdf() {
   session.renderTask?.cancel(); session.task?.destroy().catch(() => {});
   for (const url of session.urls || []) URL.revokeObjectURL(url);
 }
-async function showLibraryPdf(id, locationOverride) {
+async function showLibraryPdf(id, locationOverride, originOverride) {
+  const origin = originOverride === undefined ? captureDialogReturn() : originOverride, back = origin?.show || closeDialog;
+  const generation=searchGeneration,opening=++libraryOpenVersion;
+  await librarySaveQueue;
+  if(opening!==libraryOpenVersion || generation!==searchGeneration)return;
   const book = libraryBooks.find(b => b.id === id); if (!book) return;
-  const origin = captureDialogReturn(), back = origin?.show || closeDialog;
   const epub = book.format === "epub";
-  openDialog(book.title, `<button class="text-button" id="libraryPdfBack">‹ ${esc(origin?.title || "Library")}</button><div class="pdf-controls"><button class="secondary" id="libraryPdfPrevious" aria-label="Previous ${epub ? "section" : "page"}" disabled>‹</button><label for="libraryPdfPage">${epub ? "Section" : "Page"} <input id="libraryPdfPage" type="number" inputmode="numeric" min="1" max="${book.pages}" value="${book.page}" disabled> of <span id="libraryPdfTotal">${book.pages}</span></label><button class="secondary" id="libraryPdfNext" aria-label="Next ${epub ? "section" : "page"}" disabled>›</button></div>${epub ? "" : '<div class="pdf-view-controls" aria-label="Book display"><button class="secondary" id="libraryPdfTextView" aria-pressed="true">Text</button><button class="secondary" id="libraryPdfPageView" aria-pressed="false">Page</button></div>'}<div class="library-reader-tools"><button class="text-button" data-library-tool="contents">Contents</button><button class="text-button" data-library-tool="search">Search book</button><button class="text-button" data-library-tool="notes">Save / notes</button></div><section id="libraryToolPanel" hidden></section><div id="libraryReadingArea"><p class="helper" id="libraryPdfStatus" role="status">Opening book…</p><article class="library-pdf-text" id="libraryPdfText"></article><canvas class="library-pdf-page" id="libraryPdfCanvas" role="img" aria-label="PDF page" hidden></canvas></div>`);
+  openDialog(book.title, `<button class="text-button" id="libraryPdfBack">‹ ${esc(origin?.title || "Library")}</button><div class="pdf-controls"><button class="secondary" id="libraryPdfPrevious" aria-label="Previous ${epub ? "section" : "page"}" disabled>‹</button><label for="libraryPdfPage">${epub ? "Section" : "Page"} <input id="libraryPdfPage" type="number" inputmode="numeric" min="1" max="${book.pages}" value="${book.page}" disabled> of <span id="libraryPdfTotal">${book.pages}</span></label><button class="secondary" id="libraryPdfNext" aria-label="Next ${epub ? "section" : "page"}" disabled>›</button></div>${epub ? "" : '<div class="pdf-view-controls" aria-label="Book display"><button class="secondary" id="libraryPdfTextView" aria-pressed="true" disabled>Text</button><button class="secondary" id="libraryPdfPageView" aria-pressed="false" disabled>Page</button></div>'}<div class="library-reader-tools"><button class="text-button" data-library-tool="contents">Contents</button><button class="text-button" data-library-tool="search">Search book</button><button class="text-button" data-library-tool="notes">Save / notes</button></div><section id="libraryToolPanel" hidden></section><div class="library-pdf-error" id="libraryPdfError" hidden role="alert"><p id="libraryPdfErrorText"></p><button class="secondary" id="libraryPdfRetry">Try again</button></div><div id="libraryReadingArea"><p class="helper" id="libraryPdfStatus" role="status">Opening book…</p><article class="library-pdf-text" id="libraryPdfText"></article><canvas class="library-pdf-page" id="libraryPdfCanvas" role="img" aria-label="PDF page" hidden></canvas></div>`);
   dialog.classList.add("library-reader"); dialogBack = origin ? back : null; dialogBackSnapshot = origin?.snapshot || null;
   $("libraryPdfBack").onclick = back;
-  const session = {book,page:book.page,scroll:book.scroll || 0,view:book.view || "text",version:0,urls:[],textCache:new Map()};
+  const session = {book,page:book.page,scroll:book.scroll || 0,view:book.view || "text",version:0,urls:[],textCache:new Map(),blocksCache:new Map(),frameReady:false};
   activeLibraryPdf = session;
   try {
     const file = await libraryTransaction(["files"],"readonly",tx => tx.objectStore("files").get(id));
@@ -176,75 +186,163 @@ async function showLibraryPdf(id, locationOverride) {
     if (epub) session.epub = parseLibraryEpub(new Uint8Array(buffer));
     else {
       const renderer = await pdfRenderer(); if (activeLibraryPdf !== session) return;
-      session.task = renderer.getDocument(pdfOptions(buffer)); session.pdf = await session.task.promise;
+      session.task = renderer.getDocument(pdfOptions(buffer));
+      session.pdf = await libraryPdfWork(session.task.promise,"The book took too long to open. Try again.",()=>session.task.destroy().catch(()=>{}));
     }
     if (activeLibraryPdf !== session) return;
     $("libraryPdfPage").disabled = false;
-    $("libraryPdfPrevious").onclick = () => renderLibraryPdfPage(session,session.page-1);
-    $("libraryPdfNext").onclick = () => renderLibraryPdfPage(session,session.page+1);
+    $("libraryPdfPrevious").onclick = () => renderLibraryPdfPage(session,(session.pendingPage || session.page)-1);
+    $("libraryPdfNext").onclick = () => renderLibraryPdfPage(session,(session.pendingPage || session.page)+1);
     $("libraryPdfPage").onchange = event => renderLibraryPdfPage(session,Number(event.target.value));
+    $("libraryPdfPage").onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); event.target.blur(); } };
     if (!epub) for (const [control,view] of [["libraryPdfTextView","text"],["libraryPdfPageView","page"]])
-      $(control).onclick = () => {session.view=view; renderLibraryPdfPage(session,session.page);};
-    dialogRefresh = () => showLibraryPdf(id,{page:session.page,scroll:session.scroll});
+      { $(control).disabled=false; $(control).onclick = () => changeLibraryPdfView(session,view); }
+    dialogRefresh = () => showLibraryPdf(id,{page:session.page,scroll:session.scroll},origin);
     await renderLibraryPdfPage(session,locationOverride?.page || book.page,{scroll:locationOverride?.scroll ?? book.scroll ?? 0});
-  } catch(error) { if (activeLibraryPdf === session) $("libraryPdfStatus").textContent=pdfImportError(error); }
+  } catch(error) {
+    if (activeLibraryPdf === session) {
+      $("libraryPdfStatus").textContent="This book could not be opened.";
+      showLibraryPdfError(pdfImportError(error),()=>showLibraryPdf(id,locationOverride,origin));
+    }
+  }
 }
 function applyLibraryPdfView(session) {
   if (activeLibraryPdf !== session) return;
-  const text = session.epub || session.view === "text" && session.hasText;
+  const text = session.epub || session.displayView === "text";
   $("libraryPdfText").hidden = !text; $("libraryPdfCanvas").hidden = !!text;
   if (!session.epub) {
-    $("libraryPdfTextView").setAttribute("aria-pressed",!!text); $("libraryPdfPageView").setAttribute("aria-pressed",!text);
+    $("libraryPdfTextView").setAttribute("aria-pressed",String(!!text)); $("libraryPdfPageView").setAttribute("aria-pressed",String(!text));
   }
-  $("libraryPdfStatus").textContent = session.epub ? session.epub.sections[session.page-1].title
+  $("libraryPdfStatus").textContent = session.renderNotice || (session.epub ? session.epub.sections[session.page-1].title
     : text ? "Text preserves paragraphs where possible. Page view shows the original layout."
-    : session.view === "text" ? "This page is an image; showing Page view." : "Original PDF layout. Pinch to zoom.";
+    : session.view === "text" ? "This page is an image; showing Page view." : "Original PDF layout. Pinch to zoom.");
   $("libraryPdfStatus").hidden=!!session.epub && !!$("libraryPdfText").querySelector("h1,h2,h3");
 }
+function showLibraryPdfError(message,retry) {
+  $("libraryPdfError").hidden=false; $("libraryPdfErrorText").textContent=message;
+  $("libraryPdfRetry").onclick=retry;
+}
+function updateLibraryPdfControls(session,loading=false) {
+  const total=session.epub ? session.epub.sections.length : session.pdf?.numPages || session.book.pages;
+  $("libraryPdfPrevious").disabled=loading || session.page<=1;
+  $("libraryPdfNext").disabled=loading || session.page>=total;
+  $("libraryPdfPage").value=session.pendingPage || session.page;
+}
+function changeLibraryPdfView(session,view) {
+  if (activeLibraryPdf !== session) return;
+  const options={...(session.pendingOptions || {}),view};
+  if(view==="page")delete options.query;
+  if (session.ready) options.scroll=session.tools ? session.scroll : libraryScrollPosition();
+  return renderLibraryPdfPage(session,session.pendingPage || session.page,options);
+}
 async function saveLibraryPosition(session) {
-  try { await updateLibraryBook(session.book.id,{page:session.page,view:session.view,scroll:session.scroll || 0,lastReadAt:Date.now()}); }
+  const position={page:session.page,view:session.view,scroll:Math.max(0,Math.min(1,session.scroll || 0)),lastReadAt:Date.now()};
+  try { await updateLibraryBook(session.book.id,position); }
   catch { notify("Your reading place could not be saved. Try again."); }
+}
+async function libraryPageBlocks(session,page) {
+  session.blocksCache ||= new Map();
+  if (!session.blocksCache.has(page.pageNumber)) {
+    const blocks=libraryPdfBlocks(await libraryPdfWork(page.getTextContent(),"Text took too long to load."));
+    session.blocksCache.set(page.pageNumber,blocks);
+    session.textCache.set(page.pageNumber,blocks.map(b=>b.text).join(" "));
+  }
+  return session.blocksCache.get(page.pageNumber);
+}
+function libraryPdfWork(promise,message,onTimeout,timeout=20000) {
+  let timer;
+  const deadline=new Promise((resolve,reject)=>{
+    timer=setTimeout(()=>{reject(new Error(message));onTimeout?.();},timeout);
+  });
+  return Promise.race([promise,deadline]).finally(()=>clearTimeout(timer));
+}
+function renderLibraryCanvas(session,page) {
+  const canvas=document.createElement("canvas"); canvas.id="libraryPdfCanvas";canvas.className="library-pdf-page";
+  canvas.setAttribute("role","img");canvas.setAttribute("aria-label",`Page ${page.pageNumber} of ${session.pdf.numPages} · ${session.book.title}`);
+  const width=Math.max(1,$("libraryReadingArea").clientWidth || $("dialogBody").clientWidth-40 || 200);
+  const viewport=page.getViewport({scale:width/page.getViewport({scale:1}).width});
+  const size=libraryPdfCanvasSize(viewport.width,viewport.height,window.devicePixelRatio || 1);
+  canvas.width=size.width;canvas.height=size.height;canvas.style.width="100%";canvas.style.height="auto";
+  canvas.style.aspectRatio=`${viewport.width} / ${viewport.height}`;
+  const task=page.render({canvasContext:canvas.getContext("2d"),viewport,transform:size.scale===1 ? null : [size.scale,0,0,size.scale,0,0]});
+  session.renderTask=task;
+  return {canvas,task,width};
 }
 async function renderLibraryPdfPage(session, number, options = {}) {
   if (activeLibraryPdf !== session || !session.pdf && !session.epub) return;
-  const total = session.epub ? session.epub.sections.length : session.pdf.numPages;
-  const pageNumber = Number.isFinite(number) ? Math.max(1,Math.min(total,Math.trunc(number))) : session.page;
-  const version = ++session.version; session.ready = false; clearTimeout(session.scrollTimer); session.renderTask?.cancel();
-  $("libraryPdfPrevious").disabled=true; $("libraryPdfNext").disabled=true;
-  closeLibraryTool(session,false); $("libraryPdfStatus").hidden=false; $("libraryPdfStatus").textContent="Opening…";
+  const total=session.epub ? session.epub.sections.length : session.pdf.numPages;
+  const pageNumber=Number.isFinite(number) ? Math.max(1,Math.min(total,Math.trunc(number))) : session.page;
+  const view=options.query ? "text" : options.view || session.pendingView || session.view;
+  const previousReady=session.frameReady || session.ready;
+  if(session.ready && !session.tools) {session.scroll=libraryScrollPosition();saveLibraryPosition(session);}
+  const scroll=options.scroll ?? (pageNumber===session.page ? session.scroll || 0 : 0);
+  const version=++session.version;session.ready=false;clearTimeout(session.scrollTimer);session.renderTask?.cancel();session.renderTask=null;
+  session.pausedRender=null;
+  session.pendingPage=pageNumber;session.pendingView=view;session.pendingOptions={...options,scroll};
+  closeLibraryTool(session,false);$("libraryPdfError").hidden=true;
+  $("libraryPdfStatus").hidden=false;$("libraryPdfStatus").textContent=`Opening ${session.epub ? "section" : "page"} ${pageNumber}…`;
+  $("libraryReadingArea").setAttribute("aria-busy","true");updateLibraryPdfControls(session,true);
+  let page,render,blocks=[],html="",hasText=false,displayView="text",notice="",committed=false;
+  const urls=[];
   try {
-    let page;
-    for (const url of session.urls) URL.revokeObjectURL(url); session.urls = [];
-    if (session.epub) {
-      const section = session.epub.sections[pageNumber-1];
-      $("libraryPdfText").innerHTML = libraryEpubHtml(session.epub,section,session.urls); session.hasText = true;
+    if(session.epub) {
+      const section=session.epub.sections[pageNumber-1];html=libraryEpubHtml(session.epub,section,urls);hasText=true;
       session.textCache.set(pageNumber,section.text);
     } else {
-      page = await session.pdf.getPage(pageNumber); const content = await page.getTextContent();
-      if (activeLibraryPdf !== session || version !== session.version) return;
-      const blocks = libraryPdfBlocks(content), words = blocks.map(b => b.text).join(" ");
-      session.hasText = !!words; session.textCache.set(pageNumber,words); $("libraryPdfText").innerHTML = libraryBlocksHtml(blocks);
+      page=await libraryPdfWork(session.pdf.getPage(pageNumber),"The page took too long to load. Try again.");
+      if(activeLibraryPdf!==session || version!==session.version)return;
+      if(view==="text") {
+        try {blocks=await libraryPageBlocks(session,page);hasText=blocks.some(b=>b.text.trim());}
+        catch {notice="Text is unavailable; showing the original page.";}
+      }
+      if(activeLibraryPdf!==session || version!==session.version)return;
+      if(view!=="text" || !hasText) {
+        displayView="page";
+        try {
+          render=renderLibraryCanvas(session,page);
+          await libraryPdfWork(render.task.promise,"The page took too long to draw. Try again.",()=>render.task.cancel());
+        } catch(error) {
+          if(error?.name==="RenderingCancelledException" || activeLibraryPdf!==session || version!==session.version)throw error;
+          // A readable text copy remains available when a page cannot be rasterized.
+          if(view!=="text")blocks=await libraryPageBlocks(session,page);
+          hasText=blocks.some(b=>b.text.trim());
+          if(!hasText)throw error;
+          displayView="text";notice="Page view could not be drawn; showing text. Tap Page to retry.";
+        }
+      }
+      if(displayView==="text")html=libraryBlocksHtml(blocks);
     }
-    session.page=pageNumber; session.scroll=options.scroll || 0;
-    $("libraryPdfPage").value=pageNumber; $("libraryPdfPrevious").disabled=pageNumber===1; $("libraryPdfNext").disabled=pageNumber===total;
-    if (!session.epub && (session.view !== "text" || !session.hasText)) {
-      $("libraryPdfText").hidden=true; $("libraryPdfCanvas").hidden=true;
-      const canvas=$("libraryPdfCanvas"),width=Math.max(200,$("dialogBody").clientWidth),scale=Math.min(window.devicePixelRatio || 1,2);
-      const viewport=page.getViewport({scale:width/page.getViewport({scale:1}).width});
-      canvas.width=Math.ceil(viewport.width*scale); canvas.height=Math.ceil(viewport.height*scale);
-      canvas.style.width=`${viewport.width}px`; canvas.style.height=`${viewport.height}px`;
-      session.renderTask=page.render({canvasContext:canvas.getContext("2d"),viewport,transform:scale===1 ? null : [scale,0,0,scale,0,0]});
-      await session.renderTask.promise;
-      if (activeLibraryPdf !== session || version !== session.version) return;
-      canvas.setAttribute("aria-label",`Page ${pageNumber} of ${total} · ${session.book.title}`);
+    if(activeLibraryPdf!==session || version!==session.version)return;
+    for(const url of session.urls || [])URL.revokeObjectURL(url);session.urls=urls;
+    $("libraryPdfText").innerHTML=html;
+    if(render && displayView==="page") {
+      const oldCanvas=$("libraryPdfCanvas");oldCanvas.replaceWith(render.canvas);oldCanvas.width=oldCanvas.height=0;
+      session.canvasWidth=render.width;
     }
-    applyLibraryPdfView(session); dialog.scrollTop=session.scroll*Math.max(0,dialog.scrollHeight-dialog.clientHeight);
-    if (options.anchor) document.getElementById(`epub-${options.anchor}`)?.scrollIntoView({block:"start"});
-    if (options.query && !$("libraryPdfText").hidden) highlightLibraryMatch(options.query);
-    session.scroll=libraryScrollPosition(); session.ready=true;
-    await saveLibraryPosition(session); page?.cleanup();
+    session.page=pageNumber;session.view=view;session.displayView=displayView;session.hasText=hasText;
+    committed=true;
+    session.renderNotice=notice;session.scroll=Math.max(0,Math.min(1,scroll));
+    applyLibraryPdfView(session);dialog.scrollTop=session.scroll*Math.max(0,dialog.scrollHeight-dialog.clientHeight);
+    if(options.anchor)document.getElementById(`epub-${options.anchor}`)?.scrollIntoView({block:"start"});
+    if(options.query && displayView==="text")highlightLibraryMatch(options.query);
+    session.scroll=libraryScrollPosition();session.ready=true;session.frameReady=true;
+    await saveLibraryPosition(session);
   } catch(error) {
-    if (activeLibraryPdf === session && version === session.version && error?.name !== "RenderingCancelledException") $("libraryPdfStatus").textContent=pdfImportError(error);
+    if(activeLibraryPdf===session && version===session.version && error?.name!=="RenderingCancelledException") {
+      session.ready=!!previousReady;
+      if(previousReady)applyLibraryPdfView(session);else $("libraryPdfStatus").textContent="This page could not be opened.";
+      showLibraryPdfError(`Could not open ${session.epub ? "section" : "page"} ${pageNumber}. ${pdfImportError(error)}`,
+        ()=>renderLibraryPdfPage(session,pageNumber,{...options,view,scroll}));
+    }
+  } finally {
+    page?.cleanup();
+    if(!committed)for(const url of urls)URL.revokeObjectURL(url);
+    if(render && $("libraryPdfCanvas")!==render.canvas)render.canvas.width=render.canvas.height=0;
+    if(activeLibraryPdf===session && version===session.version) {
+      session.pendingPage=null;session.pendingView=null;session.pendingOptions=null;
+      if(session.renderTask===render?.task)session.renderTask=null;
+      $("libraryReadingArea").setAttribute("aria-busy","false");updateLibraryPdfControls(session);
+    }
   }
 }
 function downloadLibraryFile(blob, filename) {
@@ -301,5 +399,24 @@ function setupLibraryReader() {
   dialog.addEventListener("click",event=>{
     const link=event.target.closest("a[data-library-section]");
     if(link){event.preventDefault();jumpLibraryLocation(link.dataset.librarySection,link.dataset.libraryAnchor);}
+  });
+  const flush=()=>{
+    const session=activeLibraryPdf;
+    if(!session?.frameReady)return;
+    clearTimeout(session.scrollTimer);
+    if(!session.tools)session.scroll=libraryScrollPosition();
+    saveLibraryPosition(session);
+  };
+  window.addEventListener("pagehide",flush);
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)flush();});
+  let resizeTimer;
+  window.addEventListener("resize",()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(()=>{
+      const session=activeLibraryPdf;
+      if(!session?.ready || session.tools || session.epub || session.displayView!=="page")return;
+      const width=$("libraryReadingArea").clientWidth;
+      if(Math.abs(width-session.canvasWidth)>1)renderLibraryPdfPage(session,session.page,{scroll:libraryScrollPosition()});
+    },250);
   });
 }

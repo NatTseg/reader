@@ -1,4 +1,4 @@
-const CACHE = "reader-v34";
+const CACHE = "reader-v35";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,6 +24,10 @@ const ASSETS = [
   "./apple-touch-icon.png",
   "./icon-512.png",
   "./icon-maskable-512.png",
+  "./icon.svg?v=35",
+  "./apple-touch-icon.png?v=35",
+  "./icon-512.png?v=35",
+  "./icon-maskable-512.png?v=35",
   "./vendor/pdfjs/cmaps/78-EUC-H.bcmap",
   "./vendor/pdfjs/cmaps/78-EUC-V.bcmap",
   "./vendor/pdfjs/cmaps/78-H.bcmap",

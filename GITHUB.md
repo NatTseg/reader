@@ -33,3 +33,5 @@ Both localStorage and IndexedDB belong to the browser. Browser data clearing, de
 ## Reading books
 
 Library → Add book accepts PDFs and reflowable EPUB 2/3 files without DRM, under 50 MB. Imports remain private on the device. Open a book and use Contents, Search book, and Save / notes. Select text before Save / notes to include a quotation. Continue reading at the top of Library resumes the most recently opened book. PDF Text view preserves paragraphs where source layout allows; Page view shows the publisher layout. EPUB chapters use your Reader typography settings. Scanned PDFs without selectable text cannot be searched; fixed-layout EPUBs should use their PDF edition.
+
+The Jesus icon uses a clear gap between the halo and hair. Launcher and iPhone PNGs are generated from `icon.svg`; versioned icon URLs request the updated artwork. PDF errors offer retry without discarding the last readable page. PDF display changes preserve the saved reading place, and page images keep their original proportions as the viewport changes.

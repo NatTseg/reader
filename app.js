@@ -1097,6 +1097,7 @@ $("previous").onclick = () => nextChapter(-1);
 $("next").onclick = () => nextChapter(1);
 $("closeDialog").onclick = closeDialog;
 dialog.addEventListener("close", () => searchGeneration++);
+dialog.addEventListener("cancel", (event) => { event.preventDefault(); closeDialog(); });
 dialog.addEventListener("click", (e) => {
   if (e.target === dialog) {
     const r = dialog.getBoundingClientRect();
