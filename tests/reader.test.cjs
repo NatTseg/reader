@@ -152,6 +152,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v31",
         "reader-v32",
         "reader-v35",
+        "reader-v36",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -172,7 +173,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1060,4 +1061,83 @@ test('book tools can pause a slow first page and resume it when returning to rea
 test('book search tolerates spacing differences in extracted PDF text', () => {
   const run=reader();
   assert.equal(run(`librarySearchSnippet('Prayer  and\\nreflection','prayer and reflection')`),'Prayer and reflection');
+});
+
+function pdfLine(str,y,size=10,x=43){return {str,transform:[size,0,0,size,x,y],hasEOL:true};}
+test('PDF text rejoins words hyphenated at line ends but keeps real compounds and capitalized breaks', () => {
+  const run=reader();
+  run(`window.hyphen={items:[
+    ${JSON.stringify(pdfLine('Perhaps such a subject might cover the whole life and therefore in-',500))},
+    ${JSON.stringify(pdfLine('cludes all the spiritual lectures about self-',488))},
+    ${JSON.stringify(pdfLine('control and the Spir-',476))},
+    ${JSON.stringify(pdfLine('itual Wake in East-',464))},
+    ${JSON.stringify(pdfLine('West conversation.',452))}
+  ]};`);
+  assert.equal(run('libraryPdfBlocks(hyphen)[0].text'),
+    'Perhaps such a subject might cover the whole life and therefore includes all the spiritual lectures about self-control and the Spiritual Wake in East- West conversation.');
+});
+
+test('running headers and page numbers are removed when they repeat in nearby page margins', () => {
+  const run=reader();
+  const page=(n,header)=>`{items:[${JSON.stringify(pdfLine(String(n),32,9,206))},${JSON.stringify(pdfLine(header,560,9))},
+    ${JSON.stringify(pdfLine('THE IMAGE OF GOD',530,18,63))},${JSON.stringify(pdfLine('Body text for page '+n+' with enough words to set the body size.',503))},
+    ${JSON.stringify(pdfLine('More body text continues the paragraph.',491))},${JSON.stringify(pdfLine('A last line near the bottom margin.',51))}]}`;
+  run(`window.pages=[${page(10,'The Spiritual Man')},${page(11,'The Image of God')},${page(12,'The Spiritual Man')}];
+    window.edges=pages.map(p=>libraryPdfEdges(libraryPdfLines(p),[0,0,420,595]));
+    window.margins=libraryPdfMargins(edges[2],[edges[0],edges[1]]);
+    window.blocks=libraryPdfBlocks(pages[2],margins.skip);`);
+  assert.equal(run('margins.printed'),'12');
+  assert.equal(run('blocks.some(b=>/Spiritual Man|^12$/.test(b.text))'),false);
+  assert.equal(run('blocks[0].text'),'THE IMAGE OF GOD');
+  assert.match(run('blocks.at(-1).text'),/bottom margin/);
+  // A lone page has no neighbours: its number still goes, its unique header stays.
+  assert.equal(run('libraryPdfBlocks(pages[0],libraryPdfMargins(edges[0],[]).skip).some(b=>b.text==="The Spiritual Man")'),true);
+  assert.equal(run('libraryPdfBlocks(pages[0],libraryPdfMargins(edges[0],[]).skip).some(b=>b.text==="10")'),false);
+});
+
+test('printed page numbers map to PDF pages through labels or a consistent front-matter offset', () => {
+  const run=reader();
+  assert.equal(run('libraryPrintedOffset(new Map([[12,"10"],[13,"11"],[14,"12"]]))'),2);
+  assert.equal(run('libraryPrintedOffset(new Map([[12,"10"]]))'),null);
+  assert.equal(run('libraryPrintedOffset(new Map([[12,"10"],[30,"4"],[50,"90"]]))'),null);
+  run('window.s={pdf:{numPages:211},printed:new Map([[12,"10"],[13,"11"]])};');
+  assert.equal(run('libraryPrintedLabel(s,51)'),'49');
+  assert.equal(run('libraryPrintedPage(s,"49")'),51);
+  assert.equal(run('libraryPrintedPage(s,"500")'),0);
+  run('s.pageLabels=libraryUsefulLabels(["i","ii","1","2"],4);s.pdf.numPages=4;');
+  assert.equal(run('libraryPrintedLabel(s,3)'),'1');
+  assert.equal(run('libraryPrintedPage(s,"ii")'),2);
+  assert.equal(run('libraryUsefulLabels(["1","2","3"],3)'),null);
+});
+
+test('PDF page text drops neighbouring headers and records printed pages in the reader session', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`window.pageFor=n=>({pageNumber:n,view:[0,0,420,595],rotate:0,cleanup(){},getTextContent:async()=>({items:[
+      {str:String(n-2),transform:[9,0,0,9,206,32],hasEOL:true},{str:n%2 ? 'Chapter Title' : 'Book Title',transform:[9,0,0,9,43,560],hasEOL:true},
+      {str:'Read with attention and prayer on page '+n+'.',transform:[10,0,0,10,43,500],hasEOL:true}]})});
+    session.pdf.getPage=async n=>pageFor(n);`);
+  await run('renderLibraryPdfPage(session,15)');
+  const html=run('$("libraryPdfText").innerHTML');
+  assert.match(html,/attention and prayer on page 15/);
+  assert.doesNotMatch(html,/Chapter Title|<p>13<\/p>/);
+  assert.equal(run('libraryPrintedLabel(session,15)'),'13');
+  assert.equal(run('libraryPrintedPage(session,"20")'),22);
+  assert.match(run('$("libraryPdfStatus").textContent'),/Printed page 13/);
+  assert.equal(run('$("libraryPdfEnd").hidden'),false);
+});
+
+test('book search finds every match on a page and ornament lines become section breaks', () => {
+  const run=reader();
+  assert.equal(run(`libraryFindTextMatches([{text:'Pray, and pray '},{text:'again: PRAY.'}],'pray').length`),3);
+  assert.equal(run(`libraryFindTextMatches([{text:'nothing'}],'pray').length`),0);
+  assert.equal(run(`libraryBlocksHtml([{kind:'paragraph',text:'E E E'},{kind:'paragraph',text:'* * *'},{kind:'paragraph',text:'A B C'}])`),
+    '<hr class="library-pdf-break"><hr class="library-pdf-break"><p>A B C</p>');
+});
+
+test('whole-book search skips an unreadable page and reports it', async () => {
+  const run=reader();pdfRenderSession(run);
+  run(`session.pdf.numPages=3;session.tools='search';session.searchVersion=0;
+    session.pdf.getPage=async n=>n===2 ? {...pageFor(n),getTextContent:async()=>{throw new Error('broken');}} : pageFor(n);`);
+  await run('searchLibraryBook(session,"prayer")');
+  assert.match(run('$("librarySearchStatus").textContent'),/2 matching pages.*1 page could not be searched/);
 });

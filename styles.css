@@ -655,6 +655,14 @@ textarea {
 .library-search-hit { background: var(--soft); color: var(--text); outline: 1px solid var(--accent); border-radius: 3px; }
 #restoreReaderArchiveFile { margin-top: 8px; }
 .library-pdf-page { max-width: 100%; background: white; }
+.library-page-end { display: flex; justify-content: space-between; gap: 12px; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.library-page-end[hidden] { display: none; }
+.library-page-end button { flex: 1 1 0; max-width: 220px; }
+.library-page-end button:last-child { margin-left: auto; }
+.library-pdf-break { border: 0; margin: 1.6em auto; width: 3em; border-top: 1px solid var(--line); }
+.library-printed-form { margin: 0 0 20px; }
+.library-printed-form div { display: flex; gap: 8px; align-items: center; }
+.library-printed-form input { width: 110px; margin: 0; }
 .library-pdf-error { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin: 12px 0; }
 .library-pdf-error p { margin: 0 0 10px; }
 dialog.library-reader { width: 800px; }

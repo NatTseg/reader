@@ -54,7 +54,7 @@ function renderLibrary() {
   const recent = libraryBooks.filter(book => book.lastReadAt).sort((a,b) => b.lastReadAt-a.lastReadAt)[0];
   pane.innerHTML = `<div class="content"><p class="eyebrow">Books &amp; reading guides</p><h1>Library</h1><p class="subtitle">A place for the readings you want to return to.</p>${recent ? `<button class="result library-continue" data-library-read="${esc(recent.id)}"><small>Continue reading</small><strong>${esc(recent.title)}</strong><span class="helper">${esc(libraryLocation(recent))} ›</span></button>` : ""}<div class="book-tools"><button class="secondary" id="libraryAddPdf">Add book</button><button class="text-button" data-library-backup="true">Backup &amp; restore</button></div><input id="libraryPdfFile" type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden>${libraryLoading ? '<p class="helper">Opening your library…</p>' : ""}${libraryError ? `<p class="helper" role="status">${esc(libraryError)}</p>` : ""}<h2 class="section-label">Books</h2><div class="library-list">${LIBRARY_FEATURED.map(book => {const saved = libraryBooks.find(item => item.id === book.id);return libraryCard(book, saved ? `Offline · ${libraryLocation(saved).toLowerCase()}` : "Read online · import a PDF for offline reading");}).join("")}${personal.map(book => libraryCard(book, `Offline · ${libraryLocation(book).toLowerCase()}`)).join("")}</div><h2 class="section-label">Reading guides</h2><div class="library-list"><button class="result" data-essay="kallistos-reading"><strong>How to read Scripture</strong><small>Metropolitan Kallistos Ware · summary &amp; full guide</small></button><button class="result" data-essay="typology"><strong>How Scripture speaks of Christ</strong><small>Reader guide</small></button>${personalGuides.length ? personalGuides.map((guide, i) => `<button class="result" data-context-guide="${i}"><strong>${esc(guide.title)}</strong><small>Your Orthodox Study Bible copy · offline</small></button>`).join("") : ""}</div><p class="helper library-storage-note">Add PDF or EPUB books to read offline. Back up Reader to keep your books, notes, and reading places in Files or iCloud Drive.</p></div>`;
   $("libraryAddPdf").onclick = () => $("libraryPdfFile").click();
-  $("libraryPdfFile").onchange = event => importLibraryPdf(event.target.files?.[0]);
+  $("libraryPdfFile").onchange = event => { const file = event.target.files?.[0]; event.target.value = ""; importLibraryPdf(file); };
   pane.scrollTop = 0;
 }
 function showLibraryBook(id, origin = captureDialogReturn()) {
@@ -66,7 +66,7 @@ function showLibraryBook(id, origin = captureDialogReturn()) {
   dialogRefresh = () => showLibraryBook(id, origin); $("libraryBookBack").onclick = back;
   if (feature && !saved) {
     $("libraryImportBook").onclick = () => $("libraryBookFile").click();
-    $("libraryBookFile").onchange = event => importLibraryPdf(event.target.files?.[0], id);
+    $("libraryBookFile").onchange = event => { const file = event.target.files?.[0]; event.target.value = ""; importLibraryPdf(file, id); };
   }
 }
 function pdfAssets(folder) { return new URL(`./vendor/pdfjs/${folder}/`, location.href).href; }
@@ -94,14 +94,14 @@ async function libraryFileHash(buffer) {
   const digest = await crypto.subtle.digest("SHA-256",buffer);
   return [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2,"0")).join("");
 }
-async function inspectLibraryFile(file, format) {
+async function inspectLibraryFile(file, format, buffer) {
   if (!file || !file.size || file.size > LIBRARY_FILE_LIMIT) throw new Error("Choose a book smaller than 50 MB.");
   if (format === "epub") {
-    const epub = parseLibraryEpub(new Uint8Array(await file.arrayBuffer()));
+    const epub = parseLibraryEpub(new Uint8Array(buffer || await file.arrayBuffer()));
     return {pages:epub.sections.length,title:epub.title,author:epub.author};
   }
   await validateLibraryPdf(file);
-  const renderer = await pdfRenderer(), task = renderer.getDocument(pdfOptions(await file.arrayBuffer()));
+  const renderer = await pdfRenderer(), task = renderer.getDocument(pdfOptions(buffer || await file.arrayBuffer()));
   try {
     const pdf = await task.promise;
     const metadata = await pdf.getMetadata().catch(() => null);
@@ -115,8 +115,10 @@ async function importLibraryPdf(file, featuredId) {
   try {
     notify("Saving book…");
     const format = !featuredId && (/\.epub$/i.test(file.name) || file.type === "application/epub+zip") ? "epub" : "pdf";
-    const info = await inspectLibraryFile(file,format);
-    const hash = await libraryFileHash(await file.arrayBuffer());
+    if (!file.size || file.size > LIBRARY_FILE_LIMIT) throw new Error("Choose a book smaller than 50 MB.");
+    // PDF.js takes ownership of the bytes it opens, so hash them first.
+    const buffer = await file.arrayBuffer(), hash = await libraryFileHash(buffer);
+    const info = await inspectLibraryFile(file,format,buffer);
     await librarySaveQueue;
     const feature = LIBRARY_FEATURED.find(book => book.id === featuredId);
     const previous = libraryBooks.find(book => feature ? book.id === feature.id : book.hash === hash);
@@ -173,7 +175,7 @@ async function showLibraryPdf(id, locationOverride, originOverride) {
   if(opening!==libraryOpenVersion || generation!==searchGeneration)return;
   const book = libraryBooks.find(b => b.id === id); if (!book) return;
   const epub = book.format === "epub";
-  openDialog(book.title, `<button class="text-button" id="libraryPdfBack">‹ ${esc(origin?.title || "Library")}</button><div class="pdf-controls"><button class="secondary" id="libraryPdfPrevious" aria-label="Previous ${epub ? "section" : "page"}" disabled>‹</button><label for="libraryPdfPage">${epub ? "Section" : "Page"} <input id="libraryPdfPage" type="number" inputmode="numeric" min="1" max="${book.pages}" value="${book.page}" disabled> of <span id="libraryPdfTotal">${book.pages}</span></label><button class="secondary" id="libraryPdfNext" aria-label="Next ${epub ? "section" : "page"}" disabled>›</button></div>${epub ? "" : '<div class="pdf-view-controls" aria-label="Book display"><button class="secondary" id="libraryPdfTextView" aria-pressed="true" disabled>Text</button><button class="secondary" id="libraryPdfPageView" aria-pressed="false" disabled>Page</button></div>'}<div class="library-reader-tools"><button class="text-button" data-library-tool="contents">Contents</button><button class="text-button" data-library-tool="search">Search book</button><button class="text-button" data-library-tool="notes">Save / notes</button></div><section id="libraryToolPanel" hidden></section><div class="library-pdf-error" id="libraryPdfError" hidden role="alert"><p id="libraryPdfErrorText"></p><button class="secondary" id="libraryPdfRetry">Try again</button></div><div id="libraryReadingArea"><p class="helper" id="libraryPdfStatus" role="status">Opening book…</p><article class="library-pdf-text" id="libraryPdfText"></article><canvas class="library-pdf-page" id="libraryPdfCanvas" role="img" aria-label="PDF page" hidden></canvas></div>`);
+  openDialog(book.title, `<button class="text-button" id="libraryPdfBack">‹ ${esc(origin?.title || "Library")}</button><div class="pdf-controls"><button class="secondary" id="libraryPdfPrevious" aria-label="Previous ${epub ? "section" : "page"}" disabled>‹</button><label for="libraryPdfPage">${epub ? "Section" : "Page"} <input id="libraryPdfPage" type="number" inputmode="numeric" min="1" max="${book.pages}" value="${book.page}" disabled> of <span id="libraryPdfTotal">${book.pages}</span></label><button class="secondary" id="libraryPdfNext" aria-label="Next ${epub ? "section" : "page"}" disabled>›</button></div>${epub ? "" : '<div class="pdf-view-controls" aria-label="Book display"><button class="secondary" id="libraryPdfTextView" aria-pressed="true" disabled>Text</button><button class="secondary" id="libraryPdfPageView" aria-pressed="false" disabled>Page</button></div>'}<div class="library-reader-tools"><button class="text-button" data-library-tool="contents">Contents</button><button class="text-button" data-library-tool="search">Search book</button><button class="text-button" data-library-tool="notes">Save / notes</button></div><section id="libraryToolPanel" hidden></section><div class="library-pdf-error" id="libraryPdfError" hidden role="alert"><p id="libraryPdfErrorText"></p><button class="secondary" id="libraryPdfRetry">Try again</button></div><div id="libraryReadingArea"><p class="helper" id="libraryPdfStatus" role="status">Opening book…</p><article class="library-pdf-text" id="libraryPdfText"></article><canvas class="library-pdf-page" id="libraryPdfCanvas" role="img" aria-label="PDF page" hidden></canvas><nav class="library-page-end" id="libraryPdfEnd" aria-label="${epub ? "Section" : "Page"} navigation" hidden><button class="secondary" id="libraryPdfEndPrevious" disabled>‹ Previous</button><button class="secondary" id="libraryPdfEndNext" disabled>Next ${epub ? "section" : "page"} ›</button></nav></div>`);
   dialog.classList.add("library-reader"); dialogBack = origin ? back : null; dialogBackSnapshot = origin?.snapshot || null;
   $("libraryPdfBack").onclick = back;
   const session = {book,page:book.page,scroll:book.scroll || 0,view:book.view || "text",version:0,urls:[],textCache:new Map(),blocksCache:new Map(),frameReady:false};
@@ -188,11 +190,14 @@ async function showLibraryPdf(id, locationOverride, originOverride) {
       const renderer = await pdfRenderer(); if (activeLibraryPdf !== session) return;
       session.task = renderer.getDocument(pdfOptions(buffer));
       session.pdf = await libraryPdfWork(session.task.promise,"The book took too long to open. Try again.",()=>session.task.destroy().catch(()=>{}));
+      session.pageLabels = libraryUsefulLabels(await libraryPdfWork(Promise.resolve(session.pdf.getPageLabels?.()),"",undefined,5000).catch(()=>null),session.pdf.numPages);
     }
     if (activeLibraryPdf !== session) return;
     $("libraryPdfPage").disabled = false;
     $("libraryPdfPrevious").onclick = () => renderLibraryPdfPage(session,(session.pendingPage || session.page)-1);
     $("libraryPdfNext").onclick = () => renderLibraryPdfPage(session,(session.pendingPage || session.page)+1);
+    $("libraryPdfEndPrevious").onclick = () => renderLibraryPdfPage(session,(session.pendingPage || session.page)-1);
+    $("libraryPdfEndNext").onclick = () => renderLibraryPdfPage(session,(session.pendingPage || session.page)+1);
     $("libraryPdfPage").onchange = event => renderLibraryPdfPage(session,Number(event.target.value));
     $("libraryPdfPage").onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); event.target.blur(); } };
     if (!epub) for (const [control,view] of [["libraryPdfTextView","text"],["libraryPdfPageView","page"]])
@@ -214,8 +219,9 @@ function applyLibraryPdfView(session) {
     $("libraryPdfTextView").setAttribute("aria-pressed",String(!!text)); $("libraryPdfPageView").setAttribute("aria-pressed",String(!text));
   }
   $("libraryPdfStatus").textContent = session.renderNotice || (session.epub ? session.epub.sections[session.page-1].title
-    : text ? "Text preserves paragraphs where possible. Page view shows the original layout."
-    : session.view === "text" ? "This page is an image; showing Page view." : "Original PDF layout. Pinch to zoom.");
+    : (libraryPrintedLabel(session,session.page) ? `Printed page ${libraryPrintedLabel(session,session.page)}. ` : "") +
+      (text ? "Text preserves paragraphs where possible. Page view shows the original layout."
+    : session.view === "text" ? "This page is an image; showing Page view." : "Original PDF layout. Pinch to zoom."));
   $("libraryPdfStatus").hidden=!!session.epub && !!$("libraryPdfText").querySelector("h1,h2,h3");
 }
 function showLibraryPdfError(message,retry) {
@@ -227,6 +233,8 @@ function updateLibraryPdfControls(session,loading=false) {
   $("libraryPdfPrevious").disabled=loading || session.page<=1;
   $("libraryPdfNext").disabled=loading || session.page>=total;
   $("libraryPdfPage").value=session.pendingPage || session.page;
+  $("libraryPdfEndPrevious").disabled=$("libraryPdfPrevious").disabled;$("libraryPdfEndNext").disabled=$("libraryPdfNext").disabled;
+  $("libraryPdfEnd").hidden=!session.frameReady;
 }
 function changeLibraryPdfView(session,view) {
   if (activeLibraryPdf !== session) return;
@@ -240,14 +248,60 @@ async function saveLibraryPosition(session) {
   try { await updateLibraryBook(session.book.id,position); }
   catch { notify("Your reading place could not be saved. Try again."); }
 }
+function libraryPdfRaw(session,number,page) {
+  session.rawCache ||= new Map();
+  if (!session.rawCache.has(number)) {
+    const pending=(async()=>{
+      page ||= await libraryPdfWork(session.pdf.getPage(number),"The page took too long to load. Try again.");
+      const content=await libraryPdfWork(page.getTextContent(),"Text took too long to load.");
+      return {content,edges:libraryPdfEdges(libraryPdfLines(content),page.view,page.rotate)};
+    })();
+    session.rawCache.set(number,pending);
+    pending.catch(()=>{if(session.rawCache.get(number)===pending)session.rawCache.delete(number);});
+  }
+  return session.rawCache.get(number);
+}
 async function libraryPageBlocks(session,page) {
   session.blocksCache ||= new Map();
-  if (!session.blocksCache.has(page.pageNumber)) {
-    const blocks=libraryPdfBlocks(await libraryPdfWork(page.getTextContent(),"Text took too long to load."));
-    session.blocksCache.set(page.pageNumber,blocks);
-    session.textCache.set(page.pageNumber,blocks.map(b=>b.text).join(" "));
+  const number=page.pageNumber;
+  if (!session.blocksCache.has(number)) {
+    const raw=await libraryPdfRaw(session,number,page),total=session.pdf.numPages;
+    // Nearby pages reveal running headers; a slow neighbour only leaves its header in place.
+    const neighbours=await Promise.all([number-2,number-1,number+1,number+2].filter(n=>n>=1 && n<=total)
+      .map(n=>libraryPdfWork(libraryPdfRaw(session,n),"Neighbouring page timed out.",undefined,2000).then(r=>({n,edges:r.edges}),()=>({n,edges:[]}))));
+    const margins=libraryPdfMargins(raw.edges,neighbours.map(item=>item.edges));
+    session.printed ||= new Map();
+    if (margins.printed) session.printed.set(number,margins.printed);
+    for (const item of neighbours) {
+      const bare=item.edges.find(edge=>/^\d+$/.test(edge.number));
+      if (bare && !session.printed.has(item.n)) session.printed.set(item.n,bare.number);
+    }
+    const blocks=libraryPdfBlocks(raw.content,margins.skip);
+    session.blocksCache.set(number,blocks);
+    session.textCache.set(number,blocks.map(b=>b.text).join(" "));
+    session.rawCache.set(number,Promise.resolve({edges:raw.edges}));
   }
-  return session.blocksCache.get(page.pageNumber);
+  return session.blocksCache.get(number);
+}
+function libraryUsefulLabels(labels,total) {
+  return Array.isArray(labels) && labels.length===total && labels.some((label,i)=>String(label || "").trim() && String(label).trim()!==String(i+1))
+    ? labels.map(label=>String(label || "").trim()) : null;
+}
+function libraryPrintedLabel(session,page) {
+  if (session.epub) return "";
+  if (session.pageLabels) return session.pageLabels[page-1] || "";
+  const known=session.printed?.get(page);if (known) return known;
+  const offset=session.printed ? libraryPrintedOffset(session.printed) : null;
+  return offset!==null && page-offset>=1 ? String(page-offset) : "";
+}
+function libraryPrintedPage(session,label) {
+  const value=String(label || "").trim().toLocaleLowerCase(),total=session.pdf?.numPages || 0;
+  if (!value || session.epub) return 0;
+  if (session.pageLabels) return session.pageLabels.findIndex(item=>item.toLocaleLowerCase()===value)+1;
+  for (const [page,number] of session.printed || []) if (number===value) return page;
+  const offset=session.printed ? libraryPrintedOffset(session.printed) : null;
+  const page=/^\d+$/.test(value) && offset!==null ? Number(value)+offset : 0;
+  return page>=1 && page<=total ? page : 0;
 }
 function libraryPdfWork(promise,message,onTimeout,timeout=20000) {
   let timer;
@@ -407,6 +461,14 @@ function setupLibraryReader() {
     if(!session.tools)session.scroll=libraryScrollPosition();
     saveLibraryPosition(session);
   };
+  document.addEventListener("keydown",event=>{
+    const session=activeLibraryPdf;
+    if(!session || !dialog.open || session.tools || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)return;
+    if(event.target?.closest?.("input,textarea,select,[contenteditable]"))return;
+    const step=event.key==="ArrowRight" ? 1 : event.key==="ArrowLeft" ? -1 : 0,button=step && $(step>0 ? "libraryPdfNext" : "libraryPdfPrevious");
+    if(!button || button.disabled)return;
+    event.preventDefault();button.click();
+  });
   window.addEventListener("pagehide",flush);
   document.addEventListener("visibilitychange",()=>{if(document.hidden)flush();});
   let resizeTimer;

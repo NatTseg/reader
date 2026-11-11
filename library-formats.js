@@ -1,9 +1,9 @@
 // Local file formats. Imported markup never runs scripts or fetches remote assets.
 const LIBRARY_FILE_LIMIT = 50 * 1024 * 1024;
-function libraryPdfBlocks(content) {
+function libraryPdfLines(content) {
   const lines = [];
   let line;
-  for (const item of content.items || []) {
+  for (const item of content?.items || []) {
     if (typeof item.str !== "string") continue;
     if (!item.str.trim()) {
       if (line && item.str) line.text += " ";
@@ -21,6 +21,17 @@ function libraryPdfBlocks(content) {
     line.size = Math.max(line.size, size);
     if (item.hasEOL) line = null;
   }
+  for (const l of lines) l.text = l.text.replace(/\u00ad/g, "");
+  return lines;
+}
+// Words split across lines rejoin; a few common compound prefixes keep their hyphen.
+function libraryJoinLine(text, next) {
+  if (/\p{Ll}-$/u.test(text) && /^\p{Ll}/u.test(next))
+    return /(?:^|[^\p{L}])(?:self|non|half|cross|well)-$/iu.test(text) ? text + next : text.slice(0, -1) + next;
+  return text + (/\s$/.test(text) ? "" : " ") + next;
+}
+function libraryPdfBlocks(content, skip) {
+  const lines = libraryPdfLines(content).filter((line, index) => !skip?.has(index));
   if (!lines.length) return [];
   const weighted = lines.flatMap(l => Array(Math.min(100, Math.max(1, l.text.length))).fill(l.size)).sort((a,b) => a-b);
   const bodySize = weighted[Math.floor(weighted.length / 2)];
@@ -30,27 +41,72 @@ function libraryPdfBlocks(content) {
   let previous;
   for (const l of lines) {
     const text = l.text.trim();
-    const heading = l.size > bodySize*1.17 && text.length < 180;
-    const newParagraph = !previous || heading || blocks.at(-1)?.kind === "heading" ||
+    if (!text) continue;
+    const heading = l.size > bodySize*1.17 && text.length < 180, last = blocks.at(-1);
+    // Multi-line headings of one size stay one heading.
+    const headingContinues = heading && last?.kind === "heading" && previous && Math.abs(previous.size-l.size) <= l.size*.08 &&
+      previous.y-l.y > 0 && previous.y-l.y < l.size*1.9 && last.text.length + text.length < 240;
+    const newParagraph = !headingContinues && (!previous || heading || last?.kind === "heading" ||
       previous.y-l.y > leading*1.35 || previous.y-l.y < -bodySize ||
-      l.x-previous.x > bodySize || /^[•▪‣]|^\d+[.)]\s/.test(text);
+      l.x-previous.x > bodySize || /^[•▪‣]|^\d+[.)]\s/.test(text));
     if (newParagraph) blocks.push({kind: heading ? "heading" : "paragraph", text});
-    else blocks.at(-1).text += (/[-\u00ad]$/.test(blocks.at(-1).text) ? "" : " ") + text;
+    else last.text = libraryJoinLine(last.text, text);
     previous = l;
   }
   return blocks;
 }
+function libraryPdfEdgeKey(text) { return text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim(); }
+function libraryPdfPageNumber(text) {
+  const match = text.trim().match(/^(?:[-–—]\s*)?(?:[Pp]age\s+)?(\d{1,4}|[ivxlcdm]{1,7})(?:\s*[-–—])?$/);
+  return match ? match[1] : "";
+}
+// Running headers, footers, and page numbers sit in the outer margins of a page.
+function libraryPdfEdges(lines, view, rotate = 0) {
+  if (!Array.isArray(view) || view.length < 4 || (rotate || 0) % 180 || lines.length < 2) return [];
+  const bottom = Math.min(view[1], view[3]), top = Math.max(view[1], view[3]), zone = (top - bottom) * .08;
+  const order = lines.map((line, index) => index).filter(index => lines[index].text.trim()).sort((a,b) => lines[b].y - lines[a].y);
+  const picks = new Set([...order.slice(0,2).filter(i => lines[i].y > top - zone), ...order.slice(-2).filter(i => lines[i].y < bottom + zone)]);
+  return [...picks].map(index => {
+    const text = lines[index].text.trim();
+    return {index, key: libraryPdfEdgeKey(text), number: libraryPdfPageNumber(text), text};
+  }).filter(edge => edge.text.length <= 120);
+}
+// Removes edges that are bare page numbers or repeat in the margins of nearby pages.
+function libraryPdfMargins(edges, neighbours) {
+  const keys = new Set(neighbours.flatMap(list => (list || []).map(edge => edge.key)));
+  const skip = new Set();
+  let printed = "";
+  for (const edge of edges) {
+    const repeated = keys.has(edge.key) && /\p{L}/u.test(edge.key);
+    if (edge.number || repeated) skip.add(edge.index);
+    const number = edge.number || (repeated ? edge.text.match(/^(\d{1,4})\s|\s(\d{1,4})$/)?.slice(1).find(Boolean) || "" : "");
+    if (/^\d+$/.test(number) && !printed) printed = number;
+  }
+  return {skip, printed};
+}
+// Printed page numbers usually trail PDF page numbers by a fixed amount of front matter.
+function libraryPrintedOffset(printed) {
+  const counts = new Map();
+  for (const [page, number] of printed) {
+    const offset = page - Number(number);
+    if (Number.isInteger(offset)) counts.set(offset, (counts.get(offset) || 0) + 1);
+  }
+  const [offset, count] = [...counts].sort((a,b) => b[1]-a[1])[0] || [];
+  return count >= 2 && count >= printed.size * .6 ? offset : null;
+}
 function libraryBlocksHtml(blocks) {
-  return blocks.map(b => b.kind === "heading" ? `<h3>${esc(b.text)}</h3>` : `<p>${esc(b.text)}</p>`).join("");
+  // A line of repeated single ornaments (* * *) marks a section break.
+  return blocks.map(b => b.kind === "heading" ? `<h3>${esc(b.text)}</h3>`
+    : /^(\S)(?:\s+\1){2,}$/u.test(b.text) ? '<hr class="library-pdf-break">' : `<p>${esc(b.text)}</p>`).join("");
 }
 function libraryPdfCanvasSize(width, height, ratio = 1) {
   // Bound raster memory on phones, including unusually tall scanned pages.
   const scale = Math.min(Math.max(.1, ratio || 1), 2, Math.sqrt(8_000_000 / (width * height)), 8192 / width, 8192 / height);
   return {width: Math.max(1, Math.floor(width * scale)), height: Math.max(1, Math.floor(height * scale)), scale};
 }
-function libraryFindTextMatch(runs, query) {
+function libraryFindTextMatches(runs, query) {
   const needle = query.trim().replace(/\s+/g, " ").toLocaleLowerCase();
-  if (!needle) return null;
+  if (!needle) return [];
   let text = ""; const offsets = [];
   for (const [index, run] of runs.entries()) {
     if (run.gap && text && !text.endsWith(" ")) { text += " "; offsets.push(null); }
@@ -64,10 +120,12 @@ function libraryFindTextMatch(runs, query) {
       offset += character.length;
     }
   }
-  const found = text.indexOf(needle);
-  if (found < 0) return null;
-  return {start: offsets[found], end: offsets[found + needle.length - 1]};
+  const matches = [];
+  for (let found = text.indexOf(needle); found >= 0 && matches.length < 200; found = text.indexOf(needle, found + needle.length))
+    if (offsets[found] && offsets[found + needle.length - 1]) matches.push({start: offsets[found], end: offsets[found + needle.length - 1]});
+  return matches;
 }
+function libraryFindTextMatch(runs, query) { return libraryFindTextMatches(runs, query)[0] || null; }
 function libraryZipEntries(bytes, limit = 100 * 1024 * 1024, entryLimit = 20 * 1024 * 1024) {
   let total = 0, count = 0;
   const names = new Set();

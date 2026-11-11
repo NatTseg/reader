@@ -59,7 +59,12 @@ async function showLibraryContents(session) {
       }
     }
     if(activeLibraryPdf!==session || session.tools!=="contents")return;
-    host.innerHTML=`<h3>Contents</h3>${session.contents.length ? `<div class="library-list">${session.contents.map(item=>`<button class="result" data-library-jump="${item.page}" data-library-anchor="${esc(item.anchor || "")}"><strong>${esc(item.title)}</strong><small>${session.epub ? "Section" : "Page"} ${item.page}</small></button>`).join("")}</div>` : '<p>This PDF has no chapter list. Use the page number above to jump to a page, or save passages to return to them.</p>'}`;
+    const printedOffset=!session.epub && (session.pageLabels || libraryPrintedLabel(session,session.page));
+    host.innerHTML=`<h3>Contents</h3>${printedOffset ? '<form id="libraryPrintedForm" class="library-printed-form"><label class="helper" for="libraryPrintedPage">Go to a page number printed in the book</label><div><input id="libraryPrintedPage" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="e.g. 49"><button class="secondary" type="submit">Go</button></div><p class="helper" id="libraryPrintedStatus" role="status"></p></form>' : ""}${session.contents.length ? `<div class="library-list">${session.contents.map(item=>`<button class="result" data-library-jump="${item.page}" data-library-anchor="${esc(item.anchor || "")}"><strong>${esc(item.title)}</strong><small>${session.epub ? "Section" : "Page"} ${item.page}</small></button>`).join("")}</div>` : '<p>This PDF has no chapter list. Use the page number above${printedOffset ? " or a printed page number from the book’s own contents" : ""} to jump, or save passages to return to them.</p>'}`;
+    if($("libraryPrintedForm"))$("libraryPrintedForm").onsubmit=event=>{
+      event.preventDefault();const page=libraryPrintedPage(session,$("libraryPrintedPage").value);
+      if(page)jumpLibraryLocation(page);else $("libraryPrintedStatus").textContent="That printed page is not in this PDF.";
+    };
   }catch {if(host.isConnected)host.innerHTML='<p>The chapter list could not be opened. Try again.</p>';}
 }
 function showLibrarySearch(session) {
@@ -78,7 +83,7 @@ async function searchLibraryBook(session, query) {
   const needle=query.trim(),version=++session.searchVersion;
   const status=$("librarySearchStatus"),results=$("librarySearchResults");results.innerHTML="";
   if(needle.length<2){status.textContent="Enter at least two characters.";return;}
-  const matches=[],total=session.epub ? session.epub.sections.length : session.pdf.numPages;
+  const matches=[],total=session.epub ? session.epub.sections.length : session.pdf.numPages;let skipped=0;
   try {
     for(let pageNumber=1;pageNumber<=total;pageNumber++) {
       if(activeLibraryPdf!==session || session.searchVersion!==version || session.tools!=="search")return;
@@ -86,17 +91,20 @@ async function searchLibraryBook(session, query) {
       if(text===undefined) {
         if(session.epub)text=session.epub.sections[pageNumber-1].text;
         else {
-          const page=await session.pdf.getPage(pageNumber);
-          text=libraryPdfBlocks(await page.getTextContent()).map(b=>b.text).join(" ");page.cleanup();
+          // One damaged page should not end a whole-book search.
+          try {
+            const page=await libraryPdfWork(session.pdf.getPage(pageNumber),"The page took too long to load.");
+            await libraryPageBlocks(session,page);text=session.textCache.get(pageNumber) ?? "";
+          } catch {text="";skipped++;}
         }
-        session.textCache.set(pageNumber,text);
+        if(session.epub || text)session.textCache.set(pageNumber,text);
       }
       if(activeLibraryPdf!==session || session.searchVersion!==version)return;
       const snippet=librarySearchSnippet(text,needle);
       if(snippet)matches.push({page:pageNumber,snippet});
       if(pageNumber%5===0 || pageNumber===total || matches.length>=80) {
         status.textContent=`Searching ${session.epub ? "section" : "page"} ${pageNumber} of ${total}…`;
-        results.innerHTML=matches.map(m=>`<button class="result" data-library-jump="${m.page}" data-library-query="${esc(needle)}"><strong>${session.epub ? esc(session.epub.sections[m.page-1].title) : `Page ${m.page}`}</strong><p>${esc(m.snippet)}</p></button>`).join("");
+        results.innerHTML=matches.map(m=>`<button class="result" data-library-jump="${m.page}" data-library-query="${esc(needle)}"><strong>${session.epub ? esc(session.epub.sections[m.page-1].title) : `Page ${m.page}${libraryPrintedLabel(session,m.page) ? ` · printed ${esc(libraryPrintedLabel(session,m.page))}` : ""}`}</strong><p>${esc(m.snippet)}</p></button>`).join("");
         await new Promise(resolve=>setTimeout(resolve,0));
       }
       if(matches.length>=80)break;
@@ -104,6 +112,7 @@ async function searchLibraryBook(session, query) {
     if(activeLibraryPdf===session && session.searchVersion===version)status.textContent=matches.length
       ? `${matches.length===80 ? "First 80" : matches.length} matching ${session.epub ? "sections" : "pages"}. Tap a result to read.`
       : session.epub ? "No matches found." : "No matches in selectable text. Scanned pages without text cannot be searched.";
+    if(skipped && activeLibraryPdf===session && session.searchVersion===version)status.textContent+=` ${skipped} ${skipped===1 ? "page" : "pages"} could not be searched.`;
   }catch {if(status.isConnected)status.textContent="Search could not finish. Try again.";}
 }
 function jumpLibraryLocation(page, anchor="", scroll=0, query="") {
@@ -117,14 +126,18 @@ function highlightLibraryMatch(query) {
     const block=node.parentElement?.closest("p,h1,h2,h3,h4,h5,h6,li,blockquote,div,td,th");
     nodes.push(node);runs.push({text:node.textContent,gap:!!previousBlock && previousBlock!==block});previousBlock=block;
   }
-  const found=libraryFindTextMatch(runs,query);if(!found)return;
+  const found=libraryFindTextMatches(runs,query);if(!found.length)return;
   let first;
-  for(let index=found.start.index;index<=found.end.index;index++) {
-    const node=nodes[index],start=index===found.start.index ? found.start.offset : 0;
-    const end=index===found.end.index ? found.end.end : node.textContent.length;
-    if(end<=start)continue;
-    const match=node.splitText(start);match.splitText(end-start);
-    const mark=document.createElement("mark");mark.className="library-search-hit";match.replaceWith(mark);mark.append(match);first ||= mark;
+  // Wrap from the last match back so earlier text-node offsets stay valid.
+  for(const match of found.slice().reverse()) {
+    for(let index=match.end.index;index>=match.start.index;index--) {
+      const node=nodes[index],start=index===match.start.index ? match.start.offset : 0;
+      const end=index===match.end.index ? match.end.end : node.textContent.length;
+      if(end<=start)continue;
+      const hit=node.splitText(start);hit.splitText(end-start);
+      const mark=document.createElement("mark");mark.className="library-search-hit";hit.replaceWith(mark);mark.append(hit);
+      if(index===match.start.index)first=mark;
+    }
   }
   first?.scrollIntoView({block:"center"});
 }
