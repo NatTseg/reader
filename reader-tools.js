@@ -32,8 +32,8 @@ function applyReaderToolsAppearance() {
   syncViewportTheme();
 }
 function syncViewportTheme() {
-  const scheme=state.theme==='dark'?'dark':'light';
-  const color=scheme==='dark'?'#191c1b':state.paper==='warm'?'#f2e7ce':state.paper==='neutral'?'#ffffff':'#f8f6f0';
+  const scheme=state.theme==='dark'||state.theme==='night'?'dark':'light';
+  const color=state.theme==='night'?'#0c0e13':scheme==='dark'?'#191c1b':state.paper==='warm'?'#f2e7ce':state.paper==='neutral'?'#ffffff':'#f8f6f0';
   // Keep Safari's under-page background and older browsers' theme metadata in sync.
   // Give browser chrome the same concrete color as the rendered page edges.
   document.documentElement.style.backgroundColor=color;
@@ -111,7 +111,7 @@ function showStudyNote(key,source=false,parent=captureDialogReturn()) {
   studyNoteParent=parent;
   const p=parseKey(key),target=source?personalAlignment?.notes?.[key]:verifiedNoteTarget(key);
   const refs=(note.see||[]).map(ref=>{const mapped=verifiedReferenceTarget(ref);return mapped?`<button class="text-button" data-preview-ref="${mapped}" data-preview-note="${esc(key)}" ${source?'data-preview-source="true"':''}>${esc(refLabel(...Object.values(parseKey(mapped))))} ›</button>`:`<span class="helper">OSB reference: ${esc(ref)}</span>`}).join(' ');
-  openDialog(target?`${refLabel(...Object.values(parseKey(target)))} · OSB note`:(/^[A-Z0-9]{3}:\d+:\d+$/.test(note.title||'')?`${refLabel(p.book,p.ch,p.v)} · OSB note`:note.title||'Study note'),`${parent?`<button class="text-button" id="noteBack">‹ ${esc(parent.title)}</button>`:''}<article class="footnote"><p class="helper">Orthodox Study Bible${target&&target!==key?' · OSB numbering '+esc(key.split(':').slice(1).join(':')):target?'':' · original reference '+esc(key)}</p><p class="note-body">${esc(note.body)}</p>${source?`<button class="text-button" data-review-note="${key}">${target?"Review or change verse link":"Review verse link"} ›</button>`:""}${refs?`<h3 class="section-label">Related passages</h3><div class="context-list">${refs}</div>`:''}</article>`);
+  openDialogAs('note-sheet',target?`${refLabel(...Object.values(parseKey(target)))} · OSB note`:(/^[A-Z0-9]{3}:\d+:\d+$/.test(note.title||'')?`${refLabel(p.book,p.ch,p.v)} · OSB note`:note.title||'Study note'),`${parent?`<button class="text-button" id="noteBack">‹ ${esc(parent.title)}</button>`:''}<article class="footnote"><p class="helper">Orthodox Study Bible${target&&target!==key?' · OSB numbering '+esc(key.split(':').slice(1).join(':')):target?'':' · original reference '+esc(key)}</p><p class="note-body">${esc(note.body)}</p>${source?`<button class="text-button" data-review-note="${key}">${target?"Review or change verse link":"Review verse link"} ›</button>`:""}${refs?`<h3 class="section-label">Related passages</h3><div class="context-list">${refs}</div>`:''}</article>`);
   dialog.classList.add('note-sheet');
   if(parent){dialogBack=parent.show;dialogBackSnapshot=parent.snapshot;$('noteBack').onclick=parent.show;}
 }
@@ -129,7 +129,7 @@ function showPassagePreview(key,parentNote,source=false,parentVerse) {
   const p=parseKey(key);if(!validVerse(p.book,p.ch,p.v))return;
   const parent=dialog.open?captureSwipeView(dialog):null;
   const noteParent=studyNoteParent;
-  openDialog(refLabel(p.book,p.ch,p.v),`${parentNote||parentVerse?`<button class="text-button" id="previewBack">‹ ${parentNote?"Study note":"Verse"}</button>`:""}<blockquote>${esc(verseText(p.book,p.ch,p.v))}</blockquote><button class="text-button" data-action="jump" data-key="${key}">Read chapter ›</button>`);
+  openDialogAs('note-sheet',refLabel(p.book,p.ch,p.v),`${parentNote||parentVerse?`<button class="text-button" id="previewBack">‹ ${parentNote?"Study note":"Verse"}</button>`:""}<blockquote>${esc(verseText(p.book,p.ch,p.v))}</blockquote><button class="text-button" data-action="jump" data-key="${key}">Read chapter ›</button>`);
   dialog.classList.add('note-sheet');
   if(parentNote||parentVerse){dialogBack=parentNote?()=>showStudyNote(parentNote,source,noteParent):()=>{const p=parseKey(parentVerse);showVerse(p.book,p.ch,p.v)};dialogBackSnapshot=parent;$('previewBack').onclick=dialogBack;}
 }
@@ -175,11 +175,11 @@ function handleReaderToolAction(button) {
 function showTextSettings() {
   const seg = (name, options, current) => `<div class="segmented" role="group" aria-label="${name}">${options.map(([value, label]) =>
     `<button data-text-${name}="${value}" aria-pressed="${String(current) === String(value)}">${label}</button>`).join("")}</div>`;
-  openDialog("Text", `<div class="text-row"><span>Size</span><div class="stepper"><button class="secondary" id="quickFontDown" aria-label="Smaller text">A−</button><output id="quickFontValue">${state.font}</output><button class="secondary" id="quickFontUp" aria-label="Larger text">A+</button></div></div>
+  openDialogAs("text-sheet", "Text", `<div class="text-row"><span>Size</span><div class="stepper"><button class="secondary" id="quickFontDown" aria-label="Smaller text">A−</button><output id="quickFontValue">${state.font}</output><button class="secondary" id="quickFontUp" aria-label="Larger text">A+</button></div></div>
     <div class="text-row"><span>Font</span>${seg("font", [["serif", "Georgia"], ["book", "Palatino"], ["sans", "Sans"]], state.fontFamily)}</div>
     <div class="text-row"><span>Spacing</span>${seg("spacing", [[1.6, "Compact"], [1.85, "Normal"], [2.15, "Airy"]], [1.6, 1.85, 2.15].reduce((a, b) => Math.abs(b - state.lineSpacing) < Math.abs(a - state.lineSpacing) ? b : a))}</div>
     <div class="text-row"><span>Page</span>${seg("paper", [["original", "Original"], ["warm", "Warm"], ["neutral", "White"]], state.paper)}</div>
-    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Dark"]], state.theme)}</div>
+    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Gray"], ["night", "Dark"]], state.theme)}</div>
     <button class="text-button more-settings" data-open-settings="true">More settings ›</button>`);
   dialog.classList.add("text-sheet");
   // Every change applies at once and keeps the reader at the same place in the chapter.

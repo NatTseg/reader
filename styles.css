@@ -14,6 +14,20 @@
   --fs: 20px;
   --safe: env(safe-area-inset-bottom, 0px);
 }
+:root[data-theme="night"] {
+  /* True dark: near-black with a cool twilight cast, not the green-gray of Gray. */
+  color-scheme: dark;
+  --bg: #0c0e13;
+  --surface: #14171f;
+  --text: #ebe7df;
+  --muted: #9ea4b1;
+  --line: #242833;
+  --accent: #e2b48c;
+  --soft: #1c2030;
+  --highlight: #4d4124;
+  --rose: #4b2f35;
+  --paper: #263241;
+}
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #191c1b;
@@ -1081,8 +1095,8 @@ dialog.swipe-settling::backdrop { transition: background .2s ease, backdrop-filt
 #restoreBackupFile { margin: 10px 0; }
 #exportBackup { display: block; margin-bottom: 16px; }
 
-:root[data-paper="warm"]:not([data-theme="dark"]) { --bg: #f2e7ce; --surface: #f7eedb; }
-:root[data-paper="neutral"]:not([data-theme="dark"]) { --bg: #ffffff; --surface: #ffffff; }
+:root[data-paper="warm"]:not([data-theme="dark"]):not([data-theme="night"]) { --bg: #f2e7ce; --surface: #f7eedb; }
+:root[data-paper="neutral"]:not([data-theme="dark"]):not([data-theme="night"]) { --bg: #ffffff; --surface: #ffffff; }
 .verses, .prayer-text { font-family: var(--reading-font, Georgia, serif); line-height: var(--reading-leading, 1.85); }
 .essay p, .introduction p { font-family: var(--reading-font, Georgia, serif); line-height: var(--reading-leading, 1.85); }
 .setting select { max-width: 55%; padding: 8px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
@@ -1272,3 +1286,11 @@ input[type="range"], progress { accent-color: var(--accent); }
 .hour-top { display: flex; align-items: center; justify-content: space-between; }
 .verse.flash, .flash { background: var(--soft); transition: background .3s; border-radius: 6px; }
 .drawer-book { min-height: 0; padding: 7px 10px; }
+
+/* Books & chapters: collapsible testaments */
+.testament { margin-top: 12px; }
+.testament-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font-weight: 600; font-size: 15px; cursor: pointer; text-align: left; }
+.testament-toggle small { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 12px; }
+.testament-toggle .icon { width: 16px; height: 16px; color: var(--muted); transition: transform .2s; }
+.testament-toggle[aria-expanded="false"] .icon { transform: rotate(-90deg); }
+.testament-body { padding: 2px 2px 6px; }

@@ -165,6 +165,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v43",
         "reader-v44",
         "reader-v45",
+        "reader-v46",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -185,7 +186,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1378,4 +1379,22 @@ test('the chapter drawer lists OSB sections of the current chapter; an Agpeya ho
   assert.match(hour,/data-hour-jump="hour-\d+">19</);
   assert.match(hour,/Gospel/);
   assert.match(hour,/Closing/);
+});
+
+test('themes include Light, Gray, and a true Dark that survives backups', () => {
+  const run=reader();
+  run('loadPrefs({theme:"night"});');
+  assert.equal(run('state.theme'),'night');
+  run('loadPrefs({theme:"purple"});');
+  assert.equal(run('state.theme'),'light');
+});
+
+test('Books & chapters folds the Old and New Testament and remembers the choice', () => {
+  const run=reader();
+  run('dialog.showModal=()=>{dialog.open=true;};$("closeDialog").focus=()=>{};$("bookFilter").value="";loadPrefs({});state.book="JHN";state.booksOpen=null;showBooks();');
+  const html=run('$("bookResults").innerHTML');
+  assert.match(html,/data-testament="ot" aria-expanded="false"/);
+  assert.match(html,/data-testament="nt" aria-expanded="true"/);
+  run('$("bookResults").onclick({target:{closest:()=>({dataset:{testament:"ot"},getAttribute:()=>"false"})},stopPropagation(){}});');
+  assert.equal(run('state.booksOpen.ot'),true);
 });

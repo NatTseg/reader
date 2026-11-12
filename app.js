@@ -379,7 +379,7 @@ function loadPrefs(override) {
   if (!["today", "bible", "wisdom", "prayers", "library", "saved"].includes(state.tab))
     state.tab = "bible";
   if (typeof normalizeToday === "function") normalizeToday(state);
-  state.theme = state.theme === "dark" ? "dark" : "light";
+  state.theme = ["dark", "night"].includes(state.theme) ? state.theme : "light";
   if (typeof normalizeReaderTools === "function") normalizeReaderTools(state);
   applyAppearance();
   persist();
@@ -652,7 +652,7 @@ function showHourDrawer() {
     if (!group) groups.push(group = {name: section.group, items: []});
     group.items.push(section);
   }
-  openDialog(hour.name, groups.map((g) => `<h3 class="section-label">${esc(g.name)}</h3>${/Psalms$/.test(g.name)
+  openDialogAs("chapter-drawer", hour.name, groups.map((g) => `<h3 class="section-label">${esc(g.name)}</h3>${/Psalms$/.test(g.name)
     ? `<div class="chapter-grid">${g.items.map((x) => `<button data-hour-jump="${x.id}">${esc(x.label)}</button>`).join("")}</div>`
     : `<div class="drawer-sections">${g.items.map((x) => `<button data-hour-jump="${x.id}"><span>${esc(x.label)}</span></button>`).join("")}</div>`}`).join(""));
   dialog.classList.add("chapter-drawer");
@@ -739,13 +739,18 @@ function closeDialog() {
 }
 let dialogBack = null, dialogBackSnapshot = null, dialogRefresh = null;
 let wisdomBackSnapshot = null, prayerBackSnapshot = null;
-function openDialog(title, html, back = null) {
+// kind (e.g. "chapter-drawer", "note-sheet verse-sheet") is applied before the dialog opens, so a drawer
+// or sheet never flashes as a centred box first, and stays in place while its content changes.
+const DIALOG_KINDS = ["chapter-drawer", "note-sheet", "library-reader", "verse-sheet", "text-sheet"];
+function openDialogAs(kind, title, html, back = null) { return openDialog(title, html, back, kind); }
+function openDialog(title, html, back = null, kind = "") {
   stopLibraryPdf();
   cancelBackSlide();
   dialogBackSnapshot = null;
   dialogBack = back;
   dialogRefresh = null;
-  dialog.classList.remove("chapter-drawer", "note-sheet", "library-reader", "verse-sheet", "text-sheet");
+  const wanted = kind.split(/\s+/).filter(Boolean);
+  for (const name of DIALOG_KINDS) dialog.classList.toggle(name, wanted.includes(name));
   searchGeneration++;
   $("dialogTitle").textContent = title;
   $("dialogBody").innerHTML = html;
@@ -778,21 +783,30 @@ function showBooks() {
     "Books & chapters",
     '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button>' + howToReadButton() + '</div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
   );
+  // Old and New Testament fold open and closed; the choice is remembered. A search shows every match.
+  const testaments = [["ot", "Old Testament", GROUPS.slice(0, GROUPS.findIndex((g) => g.ids.includes("MAT")))], ["nt", "New Testament", GROUPS.slice(GROUPS.findIndex((g) => g.ids.includes("MAT")))]];
+  const ntBook = testaments[1][2].some((g) => g.ids.includes(state.book));
+  state.booksOpen ||= {ot: !ntBook, nt: ntBook};
   const render = () => {
-    const query = $("bookFilter").value.trim().toLowerCase();
-    $("bookResults").innerHTML =
-      GROUPS.map((g) => {
-        const books = g.ids.filter(
-          (id) =>
-            bookMeta(id) &&
-            `${displayName(id)} ${bookMeta(id).name} ${id}`
-              .toLowerCase()
-              .includes(query),
-        );
-        return books.length
-          ? `<h3 class="section-label">${esc(g.label)}</h3><div class="book-grid">${books.map((id) => `<button class="book-button" data-book="${id}" ${state.book === id ? 'aria-current="true"' : ""}>${esc(displayName(id))}</button>`).join("")}</div>`
-          : "";
-      }).join("") || '<p class="empty">No matching books.</p>';
+    const query = String($("bookFilter").value ?? "").trim().toLowerCase();
+    $("bookResults").innerHTML = testaments.map(([id, label, groups]) => {
+      const html = groups.map((g) => {
+        const books = g.ids.filter((b) => bookMeta(b) && `${displayName(b)} ${bookMeta(b).name} ${b}`.toLowerCase().includes(query));
+        return books.length ? `<h3 class="section-label">${esc(g.label)}</h3><div class="book-grid">${books.map((b) => `<button class="book-button" data-book="${b}" ${state.book === b ? 'aria-current="true"' : ""}>${esc(displayName(b))}</button>`).join("")}</div>` : "";
+      }).join("");
+      if (!html) return "";
+      const open = query ? true : state.booksOpen[id];
+      const count = groups.reduce((n, g) => n + g.ids.filter((b) => bookMeta(b)).length, 0);
+      return `<section class="testament"><button class="testament-toggle" data-testament="${id}" aria-expanded="${open}"><span>${label}</span><small>${count}</small>${icon("down")}</button><div class="testament-body" ${open ? "" : "hidden"}>${html}</div></section>`;
+    }).join("") || '<p class="empty">No matching books.</p>';
+  };
+  $("bookResults").onclick = (event) => {
+    const toggle = event.target.closest("[data-testament]");
+    if (!toggle) return;
+    event.stopPropagation();
+    state.booksOpen[toggle.dataset.testament] = toggle.getAttribute("aria-expanded") !== "true";
+    persist();
+    render();
   };
   $("bookFilter").oninput = render;
   render();
@@ -820,7 +834,7 @@ function chapterSectionsHtml(book, ch) {
 function showChapterDrawer(book = state.book) {
   const previous = neighboringBook(book, -1),
     next = neighboringBook(book, 1);
-  openDialog(
+  openDialogAs("chapter-drawer",
     displayName(book),
     `<div class="drawer-books"><button class="drawer-book" id="drawerPreviousBook" ${previous ? "" : "disabled"} aria-label="Previous book${previous ? ": " + esc(displayName(previous)) : ""}">‹ ${previous ? esc(displayName(previous)) : ""}</button><span class="drawer-position">${book === state.book ? `${state.chapter} of ${bookMeta(book).n}` : `${bookMeta(book).n} chapters`}</span><button class="drawer-book" id="drawerNextBook" ${next ? "" : "disabled"} aria-label="Next book${next ? ": " + esc(displayName(next)) : ""}">${next ? esc(displayName(next)) : ""} ›</button></div>${book === state.book ? chapterSectionsHtml(book, state.chapter) : ""}<h3 class="section-label">Chapters</h3>${chapterListHtml(book)}<button class="text-button drawer-all" id="drawerAllBooks">All books ›</button>`,
   );
@@ -979,7 +993,7 @@ function showVerse(book, ch, v) {
   const inMemory = () => typeof memoryId === "function" && (state.memory || []).some(item => item.id === `${book}:${ch}.${v}`);
   const colors = [["gold", "Gold"], ["paper", "Sage"], ["rose", "Rose"]];
   const related = relatedPassagesHtml(book, ch, v);
-  openDialog(
+  openDialogAs("note-sheet verse-sheet",
     refLabel(book, ch, v),
     `<p class="verse-preview">${esc(verseText(book, ch, v))}</p>
     <div class="verse-actions" role="toolbar" aria-label="Verse actions">
