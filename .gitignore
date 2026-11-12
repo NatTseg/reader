@@ -2,3 +2,5 @@
 # St. Athanasius Academy / Thomas Nelson). Never commit or publish this file.
 osb-notes.js
 .osb-unlock-link
+scripts/__pycache__/
+*.pyc
