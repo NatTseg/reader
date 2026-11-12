@@ -1294,3 +1294,14 @@ input[type="range"], progress { accent-color: var(--accent); }
 .testament-toggle .icon { width: 16px; height: 16px; color: var(--muted); transition: transform .2s; }
 .testament-toggle[aria-expanded="false"] .icon { transform: rotate(-90deg); }
 .testament-body { padding: 2px 2px 6px; }
+
+/* Today: context and the day's Gospel */
+.today-feast { margin: 4px 0 0; color: var(--accent); font-weight: 600; font-size: 15px; }
+.today-remember { margin: 16px 0 4px; padding: 10px 14px; border-left: 2px solid var(--accent); background: var(--soft); border-radius: 0 10px 10px 0; }
+.today-remember summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.today-remember summary::-webkit-details-marker { display: none; }
+.today-remember small { flex-basis: 100%; color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.today-remember span { font: 15px/1.4 var(--reading-font, Georgia, serif); }
+.today-remember em { font-style: normal; color: var(--accent); font-size: 13px; }
+.today-remember p { margin: 6px 0 0; font: 15px/1.4 var(--reading-font, Georgia, serif); }
+.main-reading .reading-card[open] summary { border-bottom: 0; }

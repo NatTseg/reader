@@ -166,6 +166,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v44",
         "reader-v45",
         "reader-v46",
+        "reader-v47",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -186,7 +187,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1197,11 +1198,11 @@ test('today shows the Katameros Liturgy in order with the Liturgy Psalm as the v
   assert.equal(run('katamerosDay("2099-01-01")'),null);
 });
 
-test('completing every Liturgy reading builds a streak that tolerates an unread today', () => {
+test('reading the day\'s Gospel builds a streak that tolerates an unread today', () => {
   const run=reader();
   run('loadPrefs({});state.today={done:{}};for(const key of ["2026-11-09","2026-11-10"]) state.today.done[key]=liturgyIds(katamerosDay(key));');
   assert.equal(run('readingStreak("2026-11-11")'),2);
-  run('state.today.done["2026-11-11"]=liturgyIds(katamerosDay("2026-11-11")).slice(0,2);');
+  run('state.today.done["2026-11-11"]=["Liturgy|Pauline Epistle|0"];');
   assert.equal(run('dayComplete("2026-11-11")'),false);
   assert.equal(run('readingStreak("2026-11-11")'),2);
   run('state.today.done["2026-11-11"]=liturgyIds(katamerosDay("2026-11-11"));');
@@ -1397,4 +1398,24 @@ test('Books & chapters folds the Old and New Testament and remembers the choice'
   assert.match(html,/data-testament="nt" aria-expanded="true"/);
   run('$("bookResults").onclick({target:{closest:()=>({dataset:{testament:"ot"},getAttribute:()=>"false"})},stopPropagation(){}});');
   assert.equal(run('state.booksOpen.ot'),true);
+});
+
+test('Today centres on the Gospel with the season and the Synaxarium commemorations', () => {
+  const run=reader();
+  run('loadPrefs({});window.day=katamerosDay("2026-11-11");');
+  assert.equal(run('mainReading(day).id'),'Liturgy|Psalm & Gospel|1');
+  assert.match(run('passageLabel(mainReading(day).sub.readings[1])'),/Matthew 16:13–19/);
+  assert.match(run('commemorations("2026-11-11")[0]'),/St\. Peter III/);
+  assert.equal(run('copticSeason("2026-11-25")'),'Nativity Fast');
+  assert.equal(run('copticSeason("2027-01-07")'),'');
+  assert.equal(run('copticSeason("2027-04-26")'),'Holy Week');
+  assert.equal(run('copticSeason("2027-03-15")'),'Great Fast');
+  assert.equal(run('copticSeason("2027-08-10")'),"St. Mary's Fast");
+  assert.equal(run('paschaDate(2027).toDateString()'),new Date(2027,4,2).toDateString());
+  run('renderToday("2026-11-11");');
+  const html=run('pane.innerHTML');
+  assert.match(html,/Today's Gospel/);
+  assert.match(html,/More from today's Liturgy/);
+  assert.ok(!/Vespers|Matins/.test(html));
+  assert.ok(run('mainReading(katamerosDay("2027-04-26"))')!==null);
 });

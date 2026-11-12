@@ -113,16 +113,22 @@ function verseToCarry(day) {
 }
 function readingId(sectionTitle, subTitle, index) { return `${sectionTitle}|${subTitle}|${index}`; }
 function dayDone(key) { return state.today?.done?.[key] || []; }
-function liturgyIds(day) {
-  return liturgyReadings(day).flatMap(sub => sub.readings.map((reading, i) => reading.some(p => p.verses.length) ? readingId("Liturgy", sub.title, i) : null)).filter(Boolean);
+const GOSPELS = new Set(["MAT", "MRK", "LUK", "JHN"]);
+// The day's one reading: the Liturgy Gospel, or on days without a Liturgy, the day's first Gospel.
+function mainReading(day) {
+  const psalmGospel = liturgyReadings(day).find(sub => sub.title.startsWith("Psalm"));
+  if (psalmGospel?.readings[1]?.some(p => p.verses.length)) return {section: "Liturgy", sub: psalmGospel, index: 1, id: readingId("Liturgy", psalmGospel.title, 1)};
+  for (const section of day.sections) for (const sub of section.subs) for (const [index, reading] of sub.readings.entries())
+    if (reading.some(p => GOSPELS.has(p.book) && p.verses.length)) return {section: section.title, sub, index, id: readingId(section.title, sub.title, index)};
+  return null;
 }
+// A day counts as read when its Gospel is read.
+function liturgyIds(day) { const main = mainReading(day); return main ? [main.id] : []; }
 function dayComplete(key) {
   const day = katamerosDay(key);
   if (!day) return false;
   const done = new Set(dayDone(key)), ids = liturgyIds(day);
-  // Holy Week days without a Liturgy count once any of their readings is read.
-  if (!ids.length) return done.size > 0;
-  return ids.every(id => done.has(id));
+  return ids.length > 0 && ids.every(id => done.has(id));
 }
 function readingStreak(today = localDayKey()) {
   let key = dayComplete(today) ? today : shiftDayKey(today, -1), streak = 0;
@@ -162,6 +168,27 @@ function fadeWords(text, level, seed = 7) {
   });
 }
 
+// ----- Context: season, fast, and the Synaxarium's commemorations -----
+function paschaDate(year) {
+  const a = year % 19, b = year % 4, c = year % 7, x = (19 * a + 16) % 30, y = (2 * b + 4 * c + 6 * x) % 7;
+  return new Date(year, 2, 31 + x + y + 3);
+}
+function copticSeason(key) {
+  const date = dayKeyDate(key), diff = Math.round((date - paschaDate(date.getFullYear())) / 86400000), c = copticDate(key);
+  if (diff >= -69 && diff <= -67) return "Fast of Nineveh";
+  if (diff >= -55 && diff <= -8) return "Great Fast";
+  if (diff >= -7 && diff <= -1) return "Holy Week";
+  if (diff >= 1 && diff <= 49) return "Holy Fifty Days";
+  if (diff >= 50 && (c.month === 9 || c.month === 10 || (c.month === 11 && c.day <= 4))) return "Apostles' Fast";
+  if (c.month === 12 && c.day <= 15) return "St. Mary's Fast";
+  if ((c.month === 3 && c.day >= 16) || (c.month === 4 && c.day <= 28)) return "Nativity Fast";
+  return "";
+}
+function commemorations(key) {
+  const c = copticDate(key);
+  return window.KATAMEROS?.synaxarium?.[`${c.month}-${c.day}`] || [];
+}
+
 // ----- View -----
 let todayKey = null;
 function renderToday(key = todayKey || localDayKey()) {
@@ -170,44 +197,44 @@ function renderToday(key = todayKey || localDayKey()) {
   const date = dayKeyDate(key).toLocaleDateString(undefined, {weekday: "long", month: "long", day: "numeric", year: "numeric"});
   let html = `<div class="content today"><div class="today-nav"><button class="icon-button" data-today-shift="-1" aria-label="Previous day">${icon("left")}</button>
     <div><p class="eyebrow">${key === today ? "Today" : esc(date.split(",")[0])}</p><h1>${esc(date.replace(/^[^,]+,\s*/, ""))}</h1>
-    ${day ? `<p class="coptic-date">${esc(day.coptic.name)} A.M.${day.title ? ` · <strong>${esc(day.title)}</strong>` : day.period ? ` · ${esc(day.period)}` : ""}</p>` : ""}</div>
+    ${day ? `<p class="coptic-date">${esc(day.coptic.name)} A.M.${copticSeason(key) ? ` · ${esc(copticSeason(key))}` : ""}</p>${day.title ? `<p class="today-feast">${esc(day.title)}</p>` : ""}` : ""}</div>
     <button class="icon-button" data-today-shift="1" aria-label="Next day">${icon("right")}</button></div>
     ${key !== today ? `<button class="text-button today-return" data-today-shift="0">Back to today ›</button>` : ""}`;
   if (!day) {
     html += `<p class="empty">No readings for this date.</p></div>`;
     pane.innerHTML = html; return;
   }
-  const carry = verseToCarry(day);
+  const carry = verseToCarry(day), main = mainReading(day), remembered = commemorations(key);
   if (key === today && state.book && bookMeta(state.book) && state.scroll > 0.03 && state.scroll < 0.92) html += `<button class="continue-reading" data-tab-open="bible"><small>Continue reading</small><strong>${esc(refLabel(state.book, state.chapter))}</strong><span>${Math.round((state.scroll || 0) * 100)}% ›</span></button>`;
-  if (carry) {
-    const kept = (state.memory || []).some(item => item.id === memoryId(carry.passages));
-    html += `<section class="carry"><blockquote>${esc(carry.text)}</blockquote><div class="carry-foot"><span class="carry-ref">${esc(carry.label)}</span>
-      <span class="carry-actions"><button class="text-button" data-carry-practice="true">Practice</button><button class="text-button" data-carry-memorize="true">${kept ? "✓ Kept" : "Keep"}</button></span></div></section>`;
-  }
+  if (remembered.length) html += `<details class="today-remember"><summary><small>Remembered today</small><span>${esc(remembered[0])}</span>${remembered.length > 1 ? `<em>+${remembered.length - 1}</em>` : ""}</summary>${remembered.slice(1).map(t => `<p>${esc(t)}</p>`).join("")}</details>`;
   html += planHtml(key === today);
   if (due.length) html += `<button class="today-review" data-memory-review="true"><span>Review ${due.length} memory verse${due.length === 1 ? "" : "s"}</span>${streak > 1 ? `<small>${streak} days in a row</small>` : ""}</button>`;
   const done = new Set(dayDone(key));
-  const readingCard = (sectionTitle, sub, reading, index) => {
+  const readingCard = (sectionTitle, sub, reading, index, open = false) => {
     const id = readingId(sectionTitle, sub.title, index), passages = reading.filter(p => p.verses.length);
     if (!passages.length) return "";
     const isPsalm = passages.every(p => p.book === "PSA"), title = sub.title === "Psalm & Gospel" ? (isPsalm ? "Psalm" : "Gospel") : sub.title.replace(/s$/, "") === "Prophecie" ? "Prophecy" : sub.title;
     const minutes = Math.max(1, Math.round(passages.reduce((n, p) => n + p.verses.reduce((m, v) => m + v.text.split(/\s+/).length, 0), 0) / 200));
     const first = passages.find(p => p.openable);
-    return `<details class="reading-card${done.has(id) ? " is-done" : ""}"><summary><span class="reading-check" aria-hidden="true">${done.has(id) ? "✓" : ""}</span>
+    return `<details class="reading-card${done.has(id) ? " is-done" : ""}"${open ? " open" : ""}><summary><span class="reading-check" aria-hidden="true">${done.has(id) ? "✓" : ""}</span>
       <span><small>${esc(title)}</small><strong>${esc(passageLabel(passages))}</strong></span><span class="reading-min">${minutes} min</span></summary>
       <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited}, English numbering</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${esc(v.text)}</p>`).join("")}`).join("")}
       <div class="actions"><button class="${done.has(id) ? "secondary" : "primary"}" data-reading-done="${esc(id)}">${done.has(id) ? "Mark unread" : "Done reading"}</button>
       ${first ? `<button class="text-button" data-today-visit="${first.book}:${first.chapter}:${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.book === "PS2" ? "" : first.chapter} ›</button>` : ""}
       <button class="text-button" data-memorize-reading="${esc(id)}">Memorize a verse…</button></div></div></details>`;
   };
-  const liturgy = liturgyReadings(day);
-  if (liturgy.length) {
-    const ids = liturgyIds(day), complete = ids.length && ids.every(id => done.has(id));
-    html += `<h2 class="section-label">Liturgy readings${complete ? ' <span class="complete-badge">✓ Complete</span>' : ""}</h2><div class="reading-list">${liturgy.map(sub => sub.readings.map((reading, i) => readingCard("Liturgy", sub, reading, i)).join("")).join("")}</div>`;
+  if (main) html += `<h2 class="section-label">Today's Gospel${done.has(main.id) ? ' <span class="complete-badge">✓ Read</span>' : ""}</h2><div class="reading-list main-reading">${readingCard(main.section, main.sub, main.sub.readings[main.index], main.index, !done.has(main.id))}</div>`;
+  if (carry) {
+    const kept = (state.memory || []).some(item => item.id === memoryId(carry.passages));
+    html += `<section class="carry"><blockquote>${esc(carry.text)}</blockquote><div class="carry-foot"><span class="carry-ref">${esc(carry.label)}</span>
+      <span class="carry-actions"><button class="text-button" data-carry-practice="true">Practice</button><button class="text-button" data-carry-memorize="true">${kept ? "✓ Kept" : "Keep"}</button></span></div></section>`;
   }
-  const others = day.sections.filter(section => section.title !== "Liturgy");
-  if (others.length && !liturgy.length) html += others.map(section => `<h2 class="section-label">${esc(section.title)}</h2><div class="reading-list">${section.subs.map(sub => sub.readings.map((reading, i) => readingCard(section.title, sub, reading, i)).join("")).join("")}</div>`).join("");
-  else if (others.length) html += `<details class="other-hours"><summary>${others.map(s => esc(s.title)).join(" & ")} readings</summary>${others.map(section => `<h3 class="section-label">${esc(section.title)}</h3><div class="reading-list">${section.subs.map(sub => sub.readings.map((reading, i) => readingCard(section.title, sub, reading, i)).join("")).join("")}</div>`).join("")}</details>`;
+  // The rest of the day's Liturgy (or, on days without one, the hours) folds away.
+  const liturgy = liturgyReadings(day);
+  const more = liturgy.length
+    ? liturgy.flatMap(sub => sub.readings.map((reading, i) => readingId("Liturgy", sub.title, i) === main?.id ? "" : readingCard("Liturgy", sub, reading, i))).join("")
+    : day.sections.map(section => section.subs.map(sub => sub.readings.map((reading, i) => readingId(section.title, sub.title, i) === main?.id ? "" : readingCard(section.title, sub, reading, i)).join("")).join("")).join("");
+  if (more.trim()) html += `<details class="other-hours"><summary>${liturgy.length ? "More from today's Liturgy" : "More readings for today"}</summary><div class="reading-list">${more}</div></details>`;
   html += `</div>`;
   pane.innerHTML = html;
 }
