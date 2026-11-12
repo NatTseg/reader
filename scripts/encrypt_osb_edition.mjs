@@ -1,14 +1,14 @@
 // Encrypts the private OSB edition build (bible.json, study.json) for public hosting.
 // Each file: gzip, then AES-256-GCM; stored as 12 bytes of IV followed by the ciphertext.
 // The key derives from the passphrase (PBKDF2-SHA256, 600k rounds) and the fixed salt in scripts/edition-salt.txt.
-// Usage: node scripts/encrypt_osb_edition.mjs ~/Documents/reader-private/osb/build
+// Usage: node scripts/encrypt_osb_edition.mjs ~/Documents/reader-private/osb/build [--rekey]
 // Passphrase: $OSB_PASSPHRASE, else the macOS Keychain item "unseen-warfare-pages".
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
 import {execSync} from "node:child_process";
-const [buildDir] = process.argv.slice(2);
+const [buildDir] = process.argv.slice(2).filter(arg => !arg.startsWith("--"));
 if (!buildDir) { console.error("Usage: node scripts/encrypt_osb_edition.mjs <private-build-dir>"); process.exit(1); }
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const passphrase = process.env.OSB_PASSPHRASE || execSync("security find-generic-password -s unseen-warfare-pages -w").toString().trim();
@@ -16,6 +16,17 @@ const salt = Buffer.from(fs.readFileSync(path.join(root, "scripts/edition-salt.t
 const iterations = 600000;
 const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase.normalize("NFKC")), "PBKDF2", false, ["deriveKey"]);
 const key = await crypto.subtle.deriveKey({name: "PBKDF2", hash: "SHA-256", salt, iterations}, base, {name: "AES-GCM", length: 256}, true, ["encrypt"]);
+// The passphrase is shared with another app's Keychain item. If it (or the salt) has changed, every installed copy
+// of this edition would lock: stop unless that is meant.
+const derived = Buffer.from(await crypto.subtle.exportKey("raw", key)).toString("base64url");
+const linkFile = path.join(root, ".osb-unlock-link");
+if (fs.existsSync(linkFile)) {
+  const current = fs.readFileSync(linkFile, "utf8").trim().split("#osb=")[1];
+  if (current && current !== derived && !process.argv.includes("--rekey")) {
+    console.error("The passphrase or salt now gives a different key than the current link, so every installed copy would lock.\nRun again with --rekey if that is intended, then hand out the new link.");
+    process.exit(1);
+  }
+}
 const meta = {v: 1, kdf: "PBKDF2-SHA256", iterations, salt: salt.toString("base64"), files: {}};
 for (const name of ["bible", "study"]) {
   const plain = fs.readFileSync(path.join(buildDir, `${name}.json`));
@@ -27,6 +38,5 @@ for (const name of ["bible", "study"]) {
   console.log(`${name}.enc: ${(fs.statSync(path.join(root, `${name}.enc`)).size / 1048576).toFixed(2)} MB`);
 }
 fs.writeFileSync(path.join(root, "edition.json"), JSON.stringify(meta) + "\n");
-const raw = Buffer.from(await crypto.subtle.exportKey("raw", key)).toString("base64url");
-fs.writeFileSync(path.join(root, ".osb-unlock-link"), `https://nattseg.github.io/reader-osb/#osb=${raw}\n`);
+fs.writeFileSync(linkFile, `https://nattseg.github.io/reader-osb/#osb=${derived}\n`);
 console.log("edition.json written; unlock link written to .osb-unlock-link (git-ignored).");

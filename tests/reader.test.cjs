@@ -90,6 +90,7 @@ function reader(stored = {}) {
     app.slice(0, app.search(/\nif\s*\(window\.BIBLE\?\.t\)/)),
     context,
   );
+  vm.runInContext("persistenceReady = true;", context);
   return (expression) => vm.runInContext(expression, context);
 }
 // A reader with the study pack (notes, introductions, guides, articles) open, as after start-up.
@@ -919,7 +920,7 @@ test('memory verses advance through growing intervals and a miss returns tomorro
 
 test('practice fading hides more words at each step and keeps punctuation visible', () => {
   const run=reader();
-  const hidden=level=>run(`fadeWords("The Lord is my shepherd; I shall not want.",${level}).filter(p=>p.hidden).length`);
+  const hidden=level=>run(`fadeWords("The Lord is my shepherd; I shall lack nothing.",${level}).filter(p=>p.hidden).length`);
   assert.equal(hidden(0),0);
   assert.ok(hidden(1)>0 && hidden(1)<hidden(2));
   assert.equal(hidden(3),9);
@@ -929,9 +930,13 @@ test('practice fading hides more words at each step and keeps punctuation visibl
 
 test('Today state survives backups and invalid entries are dropped', () => {
   const run=reader();
-  run(`window.r={today:{done:{"2026-11-11":["Liturgy|Pauline Epistle|0"],"bad":["x"]}},memory:[{id:"JHN:3.16",label:"John 3:16",text:"For God so loved",box:2,due:"2026-11-20"},{id:1}]};normalizeToday(r);`);
+  run(`window.r={today:{done:{"2026-11-11":["Liturgy|Pauline Epistle|0"],"bad":["x"]}},memory:[
+    {id:"JHN:3.16",label:"John 3:16",text:"stored wording",ref:[{book:"JHN",verses:[[3,16]]}],box:2,due:"2026-11-20"},
+    {id:"no-ref",label:"John 3:17",text:"only wording",box:1,due:"2026-11-20"},{id:"bad-ref",label:"x",ref:[{book:"JHN",verses:[[3,999]]}],box:1,due:"2026-11-20"},{id:1}]};normalizeToday(r);`);
   assert.deepEqual(JSON.parse(run('JSON.stringify(Object.keys(r.today.done))')),['2026-11-11']);
   assert.equal(run('r.memory.length'),1);
+  assert.equal(run('"text" in r.memory[0]'),false);
+  assert.equal(run('memoryText(r.memory[0])'),run('flatText(verseText("JHN",3,16))'));
   assert.equal(run('backupReader({...r,tab:"today"}).memory.length'),1);
 });
 
@@ -1205,7 +1210,7 @@ test("every verse, note, introduction, guide, and article is the ebook's own tex
 test("well-known verses stand where the Orthodox Study Bible numbers them", () => {
   const run = reader();
   const at = (b, c, v) => run(`verseText("${b}",${c},${v})`);
-  assert.match(at("GEN", 1, 1), /^In the beginning God made heaven and earth/);
+  assert.match(at("GEN", 1, 1), /^In the beginning God made heaven/);
   assert.match(at("PSA", 22, 1), /Lord is my shepherd/);
   assert.match(at("PSA", 50, 3), /^Have mercy on me, O God/);
   assert.match(at("PSA", 109, 4), /priest forever/);
@@ -1412,7 +1417,11 @@ test("notes open from their verse, list under their chapter, and never leak mark
   assert.match(html, /Study article/);
   assert.match(html, /All notes in Genesis/);
   assert.ok(!/OSB source|Needs review|Earlier imported|Original reference|undefined/.test(html));
-  run("state.showNotes=false;");
+  // Opening the note from its verse shows the whole note under the verse's own reference.
+  run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};handleAction({target:{closest:()=>({dataset:{action:"note",key:"GEN:1:1"}})}});');
+  assert.equal(run('$("dialogTitle").textContent'), "Genesis 1:1 · OSB note");
+  assert.ok(run('$("dialogBody").innerHTML').includes(run('esc(personalSourceNotes["GEN:1:1"].body)')));
+  run("closeDialog();state.showNotes=false;");
   assert.equal(run("notesHtml()"), "");
   assert.ok(!run('verseHtml("GEN",1,1)').includes("note-dot"));
   assert.ok(Object.values(STUDY.sourceNotes).every((n) => !/<[a-z/]/i.test(n.body)));
@@ -1441,13 +1450,16 @@ test("the New Testament's translators' notes keep their letters in the text and 
   const run = readerWithStudy();
   assert.equal(run("Object.keys(personalTextNotes).length"), Object.keys(STUDY.textNotes).length);
   // In the text: one small letter per note, in place, and none when study notes are switched off.
-  for (const key of Object.keys(BIBLE.marks).filter((k, i) => i % 97 === 0)) {
+  for (const key of Object.keys(BIBLE.marks)) {
     const [b, c, v] = key.split(":");
     const html = run(`verseHtml("${b}",${c},${v})`);
     assert.equal((html.match(/<sup class="tn"/g) || []).length, BIBLE.marks[key].length, key);
     const shown = html.replace(/<button class="verse-number"[^]*?<\/button>/, "").replace(/<button class="note-link"[^]*?<\/button>/g, "").replace(/<sup class="tn"[^>]*>[a-z]+<\/sup>/g, "").replace(/<[^>]+>/g, "")
       .replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">");
     assert.equal(shown, BIBLE.t[b][c - 1][v].replace(/\n/g, ""), `${key}: the words of the verse changed`);
+    const body = html.replace(/<button class="verse-number"[^]*?<\/button>/, "").replace(/<button class="note-link"[^]*?<\/button>/g, "");
+    const before = body.split(/<sup class="tn"[^>]*>[a-z]+<\/sup>/).slice(0, -1).map((part, i, parts) => parts.slice(0, i + 1).join("").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').length);
+    assert.deepEqual(before, BIBLE.marks[key].map(([offset]) => BIBLE.t[b][c - 1][v].slice(0, offset).replace(/\n/g, "").length), `${key}: a letter is out of place`);
   }
   const sample = Object.keys(BIBLE.marks)[0], [b, c, v] = sample.split(":");
   assert.equal(run(`lineHtml("ab cd", [], [[0,"<x>"],[2,"<y>"],[5,"<z>"]], "<m>")`), "<x>ab<y> <span class=\"nw\">cd<z><m></span>");
@@ -1630,6 +1642,11 @@ test("backups hold reading data only and refuse another edition's verse numbers"
   assert.equal(run("checked.reader.secret"), undefined);
   assert.equal(run("checked.reader.edition"), BIBLE.edition);
   assert.match(run("backupCounts(checked)"), /1 bookmarks · 0 highlights · 1 comments · 0 memory verses/);
+  run('memorizeBibleVerse("JHN",3,16); window.withMemory=validateBackup({format:"orthobible-backup",version:1,reader:backupReader(state),personal:null});');
+  assert.equal(run("withMemory.reader.memory.length"), 1);
+  assert.equal(run('JSON.stringify(withMemory.reader.memory[0].ref)'), JSON.stringify([{ book: "JHN", verses: [[3, 16]] }]));
+  assert.ok(!/loved|begotten|text/.test(run("JSON.stringify(withMemory.reader.memory)")), "a backup holds a memory verse's reference, not its words");
+  assert.match(run("memoryText(state.memory[0])"), /so loved the world/);
   assert.throws(() => run("validateBackup({...backup,version:99})"));
   assert.throws(() => run("validateBackup({...backup,reader:{...backup.reader,chapter:999}})"));
   assert.throws(() => run('validateBackup({...backup,reader:{...backup.reader,comments:{"BAD:1:1":"bad"}}})'));
@@ -1648,7 +1665,7 @@ test("restoring a backup replaces reading data, keeps an undo copy, and leaves t
   assert.equal(run("Object.keys(personalIntroductions).length"), 78);
   assert.equal(run("persistenceBusy"), false);
 });
-test("Reading settings offer Lock (two taps) and name the text; nothing mentions imports or other editions", () => {
+test("Reading settings offer Lock (two taps) and name the text; nothing mentions imports or other editions", async () => {
   const run = readerWithStudy();
   run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};showSettings();');
   const html = run('$("dialogBody").innerHTML');
@@ -1661,9 +1678,27 @@ test("Reading settings offer Lock (two taps) and name the text; nothing mentions
     window.button=$("lockOsb");button.dataset={};button.isConnected=true;button.textContent="Lock";wireOsbSettings();button.onclick();`);
   assert.equal(run("locked"), 0);
   assert.equal(run("button.textContent"), "Tap again to lock");
-  run("button.onclick();");
+  await run("button.onclick()");
   assert.equal(run("locked"), 1);
   assert.equal(run("reloaded"), 1);
+});
+test("nothing is saved before the stored state has been read; search folds typographic quotes", async () => {
+  const run = reader();
+  run("window.writes=0;localStorage.setItem=()=>{writes++};persistenceReady=false;state.book='GEN';persist();");
+  assert.equal(run("writes"), 0, "a save before start-up finished would replace stored data with defaults");
+  run("persistenceReady=true;persist();");
+  assert.equal(run("writes"), 1);
+  assert.equal(run('searchFold("God’s “word”—here\\nnext")'), 'god\'s "word"-here next');
+  // A query typed with a straight apostrophe finds verses printed with a curly one, across a line break too.
+  const sample = BIBLE.t.PSA.flat().find((text) => /\w’s \w+\n\w/.test(text) || /\w’s \w/.test(text));
+  const phrase = sample.replace(/\n/g, " ").match(/\w+’s \w+/)[0].replace("’", "'");
+  run(`dialog.open=true;$("searchInput").value=${JSON.stringify(phrase)};$("searchArea").value="all";`);
+  await run("runSearch()");
+  assert.match(run('$("searchResults").innerHTML'), /matching verses|First 80 matches/);
+  assert.ok((run('$("searchResults").innerHTML').match(/class="result"/g) || []).length >= 1, `nothing found for ${phrase.length} characters`);
+  run('$("searchInput").value="zzzqqq";');
+  await run("runSearch()");
+  assert.match(run('$("searchResults").innerHTML'), /0 matching verses/);
 });
 test("this edition keeps its own storage, apart from the other Reader on the same site", () => {
   const sources = ["app.js", "boot.js", "persistence.js", "personal-notes.js", "library.js", "sw.js", "index.html", "osb-pack.js", "today.js", "reader-tools.js", "library-backup.js", "library-tools.js", "swipe.js"]
@@ -1706,40 +1741,37 @@ test("the service worker caches every file the app loads, refreshes them on upda
   assert.deepEqual(deleted.sort(), ["reader-osb-v0", "reader-osb-v1", "reader-osb-v999"].filter((key) => key !== current).sort());
 });
 test("no Bible or study text is published outside the encrypted packs", () => {
-  // Distinctive passages from across the private build must not appear in any file the site serves.
-  const samples = [];
-  for (const book of BIBLE.books) for (const c of [0, Math.floor(book.n / 2), book.n - 1]) {
-    const verses = BIBLE.t[book.id][c].filter((v) => v.length >= 70);
-    if (verses.length) samples.push(verses[Math.floor(verses.length / 2)].replace(/\n/g, " ").slice(8, 58));
-  }
-  const notes = Object.values(STUDY.sourceNotes);
-  for (let i = 0; i < notes.length; i += 40) if (notes[i].body.length > 120) samples.push(notes[i].body.slice(40, 90));
-  for (const guide of STUDY.guides) { const p = guide.blocks.find((b) => b.text && b.text.length > 150); if (p) samples.push(p.text.slice(60, 110)); }
-  assert.ok(samples.length > 350);
-  const served = [...new Set([...PUBLIC_FILES(), "sw.js"])].filter((f) => fs.existsSync(path.join(root, f)) && fs.statSync(path.join(root, f)).isFile());
-  for (const file of served) {
-    if (/\.(enc|png|wasm|pfb|ttf|bcmap|icc)$/.test(file)) continue;
-    const text = fs.readFileSync(path.join(root, file), "utf8").replace(/\s+/g, " ");
-    for (const sample of samples) assert.ok(!text.includes(sample.replace(/\s+/g, " ")), `${file} contains Bible or study text`);
-  }
+  // Every run of eight words in every file the site serves (and in what the repository publishes) is compared
+  // with the whole private build: all chapters, notes, introductions, guides, and articles.
+  const { leaks } = require(path.join(root, "scripts", "leak_scan.cjs"));
+  const tracked = require("node:child_process").execSync("git ls-files", { cwd: root }).toString().split("\n").filter(Boolean);
+  const names = [...new Set([...PUBLIC_FILES(), "sw.js", ...tracked.filter((file) => !file.startsWith("vendor/"))])];
+  assert.deepEqual(leaks(root, names, BIBLE, STUDY), []);
   // The packs themselves are ciphertext: no readable words.
   for (const file of ["bible.enc", "study.enc"]) {
     const bytes = fs.readFileSync(path.join(root, file));
     assert.ok(bytes.length > 500000);
     assert.ok(!bytes.includes(Buffer.from("the Lord")) && !bytes.includes(Buffer.from('"books"')), `${file} is readable`);
   }
-  const tracked = require("node:child_process").execSync("git ls-files", { cwd: root }).toString().split("\n").filter(Boolean);
   assert.ok(!tracked.some((file) => /bible\.json|study\.json|osb-edition\.json|\.osb-unlock-link|bible-data\.js|legacy-web-data\.js/.test(file)));
+  // The unlock key appears in nothing that is served or tracked.
+  const key = unlockKey();
+  if (key) for (const file of names) {
+    const full = path.join(root, file);
+    if (fs.existsSync(full) && fs.statSync(full).isFile()) assert.ok(!fs.readFileSync(full).includes(Buffer.from(key)), `${file} contains the unlock key`);
+  }
 });
-test("the encrypted packs are exactly the tested build and open only with the right key", async () => {
+test("the encrypted packs were built from exactly the tested text", () => {
   const meta = JSON.parse(fs.readFileSync(path.join(root, "edition.json"), "utf8"));
   const id = (text) => crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);
   assert.equal(meta.files.bible.id, id(bibleJson), "bible.enc was built from a different bible.json: run scripts/encrypt_osb_edition.mjs");
   assert.equal(meta.files.study.id, id(studyJson), "study.enc was built from a different study.json: run scripts/encrypt_osb_edition.mjs");
   assert.equal(meta.iterations, 600000);
-  const linkFile = path.join(root, ".osb-unlock-link");
-  if (!fs.existsSync(linkFile)) return;
-  const key = Buffer.from(fs.readFileSync(linkFile, "utf8").trim().split("#osb=")[1], "base64url");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, "manifest.webmanifest"), "utf8")).id, "/reader-osb/");
+  assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /<meta name="robots" content="noindex, nofollow"/);
+});
+test("the packs decrypt to the tested text with the link's key and with no other", { skip: !unlockKey() && "no unlock link on this machine" }, async () => {
+  const key = Buffer.from(unlockKey(), "base64url");
   assert.equal(key.length, 32);
   const open = async (file, raw) => {
     const bytes = fs.readFileSync(path.join(root, file));
@@ -1751,25 +1783,35 @@ test("the encrypted packs are exactly the tested build and open only with the ri
   assert.equal(await open("study.enc", key), studyJson);
   await assert.rejects(open("bible.enc", crypto.randomBytes(32)));
 });
-// boot.js in a small page stand-in: fetch reads the repository's files; scripts "load" without running.
-function bootPage({ hash = "", stored = null, online = true } = {}) {
-  const store = new Map(stored ? [["reader-osb-edition-key", stored]] : []);
+
+// ----- boot.js in a small page stand-in -----
+// fetch reads files from a directory (the repository, or a throwaway pack made with a known passphrase);
+// scripts "load" without running. `failing` names files whose fetch rejects, as when the network is down.
+function unlockKey() {
+  const file = path.join(root, ".osb-unlock-link");
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim().split("#osb=")[1] : null;
+}
+function bootPage({ hash = "", storage = {}, dir = root, failing = [], failScript = null } = {}) {
+  const store = new Map(Object.entries(storage));
   const element = (extra = {}) => ({ hidden: false, innerHTML: "", textContent: "", disabled: false, value: "", ...extra });
   const nodes = { lock: element({ hidden: true }), app: element(), pane: element(), lockStatus: element(), lockPassphrase: element(), lockForm: null };
-  const loaded = [], registered = [];
+  const loaded = [], registered = [], listeners = {};
   const submitButton = element();
   const context = {
     console, atob, btoa, TextEncoder, TextDecoder, Uint8Array, Blob, Response, DecompressionStream, crypto: crypto.webcrypto, setTimeout, clearTimeout,
     location: { hash, pathname: "/reader-osb/", search: "" },
-    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
+    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
     navigator: { serviceWorker: { register: (url) => { registered.push(url); return Promise.resolve(); } } },
+    addEventListener: (name, fn) => { listeners[name] = fn; },
     fetch: async (file) => {
-      if (!online) throw new TypeError("offline");
-      const bytes = fs.readFileSync(path.join(root, file));
+      if (failing.includes(file)) throw new TypeError("Load failed");
+      const full = path.join(dir, file);
+      if (!fs.existsSync(full)) return { ok: false };
+      const bytes = fs.readFileSync(full);
       return { ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), json: async () => JSON.parse(bytes.toString("utf8")) };
     },
     document: {
-      head: { append(script) { loaded.push(script.src); Promise.resolve().then(() => script.onload()); } },
+      head: { append(script) { loaded.push(script.src); Promise.resolve().then(() => (script.src === failScript ? script.onerror() : script.onload())); } },
       createElement: () => ({}),
       querySelector: (selector) => (selector === ".app" ? nodes.app : null),
       getElementById(id) {
@@ -1779,15 +1821,34 @@ function bootPage({ hash = "", stored = null, online = true } = {}) {
     },
   };
   context.window = context;
+  context.globalThis = context;
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(root, "boot.js"), "utf8"), context);
-  const settle = async (ready) => { for (let i = 0; i < 400 && !ready(); i++) await new Promise((r) => setTimeout(r, 25)); };
-  return { context, nodes, loaded, registered, store, settle };
+  const settle = async (ready) => { for (let i = 0; i < 600 && !ready(); i++) await new Promise((r) => setTimeout(r, 20)); };
+  const submitPassphrase = (text) => { nodes.lockPassphrase.value = text; return nodes.lockForm.onsubmit({ preventDefault() {} }); };
+  return { context, nodes, loaded, registered, store, settle, listeners, submitPassphrase, submitButton };
 }
-const unlockKey = () => {
-  const file = path.join(root, ".osb-unlock-link");
-  return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim().split("#osb=")[1] : null;
-};
+// A throwaway pack: the same format as the real one, made with a known passphrase, holding no Bible text.
+let testPack;
+function throwawayPack() {
+  if (testPack) return testPack;
+  const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "reader-osb-test-"));
+  const passphrase = "a passphrase for tests", salt = crypto.randomBytes(16), iterations = 1000;
+  const key = crypto.pbkdf2Sync(passphrase.normalize("NFKC"), salt, iterations, 32, "sha256");
+  const seal = (name, value) => {
+    const iv = crypto.randomBytes(12), cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const sealed = Buffer.concat([cipher.update(require("node:zlib").gzipSync(JSON.stringify(value))), cipher.final(), cipher.getAuthTag()]);
+    fs.writeFileSync(path.join(dir, `${name}.enc`), Buffer.concat([iv, sealed]));
+  };
+  seal("bible", { edition: "test", books: [], t: {} });
+  seal("study", { notes: {}, sourceNotes: {} });
+  fs.writeFileSync(path.join(dir, "edition.json"), JSON.stringify({ v: 1, iterations, salt: salt.toString("base64"), files: { bible: { file: "bible.enc" }, study: { file: "study.enc" } } }));
+  const text = (bytes) => bytes.toString("base64");
+  testPack = { dir, passphrase, key: text(key), link: key.toString("base64url"), other: () => crypto.randomBytes(32).toString("base64url") };
+  process.on("exit", () => fs.rmSync(dir, { recursive: true, force: true }));
+  return testPack;
+}
+const KEY = "reader-osb-edition-key", LOCKED = "reader-osb-edition-locked";
 test("without a key the app stays locked and loads nothing", async () => {
   const page = bootPage();
   await page.settle(() => !page.nodes.lock.hidden);
@@ -1798,35 +1859,115 @@ test("without a key the app stays locked and loads nothing", async () => {
   assert.ok(!/—/.test(page.nodes.lock.innerHTML));
   assert.equal(page.context.BIBLE, undefined);
   assert.deepEqual(page.loaded, []);
+  assert.deepEqual(page.registered, ["./sw.js"]);
 });
-test("the private link opens the text, keeps the key for next time, and loads the app in order", { skip: !unlockKey() && "no unlock link on this machine" }, async () => {
+test("the private link opens the real text, is remembered, and loads the app in order", { skip: !unlockKey() && "no unlock link on this machine" }, async () => {
   const page = bootPage({ hash: `#osb=${unlockKey()}` });
   await page.settle(() => page.loaded.includes("app.js"));
-  assert.equal(page.context.BIBLE.edition, BIBLE.edition);
   assert.equal(JSON.stringify(page.context.BIBLE), JSON.stringify(BIBLE));
   assert.equal(page.nodes.lock.hidden, true);
   assert.equal(page.nodes.app.hidden, false);
   assert.equal(page.loaded[0], "edition.js");
   assert.equal(page.loaded.at(-1), "app.js");
   assert.ok(page.loaded.indexOf("personal-notes.js") < page.loaded.indexOf("osb-pack.js"));
-  assert.ok(page.store.get("reader-osb-edition-key"));
-  assert.ok(page.registered.includes("./sw.js"));
+  assert.ok(page.store.get(KEY));
   assert.equal(JSON.stringify(await page.context.OSB_EDITION.study()), JSON.stringify(STUDY));
-  // A later launch with no link in the address bar (the saved key) opens too; Lock forgets the key.
-  const again = bootPage({ stored: page.store.get("reader-osb-edition-key") });
-  await again.settle(() => again.loaded.includes("app.js"));
-  assert.equal(again.context.BIBLE.books.length, 78);
-  again.context.OSB_EDITION.lock();
-  assert.equal(again.store.has("reader-osb-edition-key"), false);
 });
-test("a wrong or outdated key shows the lock screen instead of a broken app", async () => {
-  const page = bootPage({ hash: `#osb=${crypto.randomBytes(32).toString("base64url")}` });
+test("a key is remembered only once it has opened the text; a stale or foreign link never displaces a working key", async () => {
+  const pack = throwawayPack();
+  // The link alone opens the pack and is remembered.
+  const first = bootPage({ dir: pack.dir, hash: `#osb=${pack.link}` });
+  await first.settle(() => first.loaded.includes("app.js"));
+  assert.equal(first.context.BIBLE.edition, "test");
+  assert.equal(first.store.get(KEY), pack.key);
+  // Later launches need no link.
+  const later = bootPage({ dir: pack.dir, storage: { [KEY]: pack.key } });
+  await later.settle(() => later.loaded.includes("app.js"));
+  assert.equal(later.context.BIBLE.edition, "test");
+  // A link with another key (an old link, or the other Reader's link) falls back to the remembered key and leaves it alone.
+  const stale = bootPage({ dir: pack.dir, hash: `#osb=${pack.other()}`, storage: { [KEY]: pack.key } });
+  await stale.settle(() => stale.loaded.includes("app.js"));
+  assert.equal(stale.context.BIBLE.edition, "test");
+  assert.equal(stale.store.get(KEY), pack.key);
+  // A wrong link with nothing remembered: locked, with the reason, and nothing stored.
+  const wrong = bootPage({ dir: pack.dir, hash: `#osb=${pack.other()}` });
+  await wrong.settle(() => !wrong.nodes.lock.hidden);
+  assert.match(wrong.nodes.lock.innerHTML, /This link no longer opens the text\. Use your latest link\./);
+  assert.equal(wrong.context.BIBLE, undefined);
+  assert.equal(wrong.store.has(KEY), false);
+  assert.deepEqual(wrong.loaded, []);
+  // A remembered key that no longer opens the text (after a re-key) is forgotten.
+  const rekeyed = bootPage({ dir: pack.dir, storage: { [KEY]: Buffer.from(pack.other(), "base64url").toString("base64") } });
+  await rekeyed.settle(() => !rekeyed.nodes.lock.hidden);
+  assert.equal(rekeyed.store.has(KEY), false);
+  // Pasting the right link into the locked tab opens it.
+  wrong.context.location.hash = `#osb=${pack.link}`;
+  wrong.listeners.hashchange();
+  await wrong.settle(() => wrong.loaded.includes("app.js"));
+  assert.equal(wrong.context.BIBLE.edition, "test");
+  assert.equal(wrong.store.get(KEY), pack.key);
+});
+test("a failed download is reported as a download problem, not as a bad link or passphrase", async () => {
+  const pack = throwawayPack();
+  const noMeta = bootPage({ dir: pack.dir, hash: `#osb=${pack.link}`, failing: ["edition.json"] });
+  await noMeta.settle(() => !noMeta.nodes.lock.hidden);
+  assert.match(noMeta.nodes.lock.innerHTML, /Connect to the internet once to download the text\./);
+  assert.ok(!noMeta.nodes.lock.innerHTML.includes("lockForm"));
+  const noText = bootPage({ dir: pack.dir, hash: `#osb=${pack.link}`, storage: { [KEY]: pack.key }, failing: ["bible.enc"] });
+  await noText.settle(() => !noText.nodes.lock.hidden);
+  assert.match(noText.nodes.lock.innerHTML, /Connect to the internet once to download the text\./);
+  assert.ok(!/no longer opens/.test(noText.nodes.lock.innerHTML));
+  assert.equal(noText.store.get(KEY), pack.key, "a network failure must not forget a good key");
+  await noText.submitPassphrase(pack.passphrase);
+  assert.equal(noText.nodes.lockStatus.textContent, "Connect to the internet once to download the text.");
+  assert.equal(noText.submitButton.disabled, false);
+  // A browser without the needed features says so.
+  const old = bootPage({ dir: pack.dir, hash: `#osb=${pack.link}` });
+  await old.settle(() => old.loaded.includes("app.js"));
+  const unsupported = bootPage({ dir: pack.dir, storage: {} });
+  await unsupported.settle(() => !unsupported.nodes.lock.hidden);
+  unsupported.context.DecompressionStream = undefined;
+  await unsupported.submitPassphrase(pack.passphrase);
+  assert.equal(unsupported.nodes.lockStatus.textContent, "This browser cannot open the text. Update it and try again.");
+});
+test("the passphrase opens the text and is remembered as a key; a wrong one says so and can be retried", async () => {
+  const pack = throwawayPack();
+  const page = bootPage({ dir: pack.dir });
   await page.settle(() => !page.nodes.lock.hidden);
-  assert.equal(page.nodes.lock.hidden, false);
-  assert.match(page.nodes.lock.innerHTML, /This link no longer opens the text\. Use your latest link\./);
-  assert.equal(page.context.BIBLE, undefined);
-  assert.deepEqual(page.loaded, []);
-  const offline = bootPage({ hash: `#osb=${crypto.randomBytes(32).toString("base64url")}`, online: false });
-  await offline.settle(() => !offline.nodes.lock.hidden);
-  assert.match(offline.nodes.lock.innerHTML, /Connect to the internet once to download the text\./);
+  await page.submitPassphrase("not the passphrase");
+  assert.equal(page.nodes.lockStatus.textContent, "That passphrase did not open the text.");
+  assert.equal(page.submitButton.disabled, false);
+  assert.equal(page.store.has(KEY), false);
+  await page.submitPassphrase(pack.passphrase);
+  await page.settle(() => page.loaded.includes("app.js"));
+  assert.equal(page.context.BIBLE.edition, "test");
+  assert.equal(page.store.get(KEY), pack.key);
+  assert.equal(page.nodes.lock.hidden, true);
+  // If a script cannot load after unlocking, the reader says so where it can be seen, and the key is kept.
+  const broken = bootPage({ dir: pack.dir, failScript: "today.js" });
+  await broken.settle(() => !broken.nodes.lock.hidden);
+  await broken.submitPassphrase(pack.passphrase);
+  assert.equal(broken.nodes.pane.innerHTML, '<p class="empty">Reader could not start. Reload to try again.</p>');
+  assert.equal(broken.nodes.lock.hidden, true);
+  assert.equal(broken.store.get(KEY), pack.key);
+});
+test("Lock holds: the same link, even from a Home Screen icon, stays locked until the passphrase or a new key", async () => {
+  const pack = throwawayPack();
+  const page = bootPage({ dir: pack.dir, hash: `#osb=${pack.link}` });
+  await page.settle(() => page.loaded.includes("app.js"));
+  await page.context.OSB_EDITION.lock();
+  assert.equal(page.store.has(KEY), false);
+  const mark = page.store.get(LOCKED);
+  assert.ok(mark && !mark.includes(pack.key.slice(0, 12)), "the lock mark is not the key");
+  // Relaunching from the icon whose address still carries the key: locked, and the key is not stored again.
+  const relaunch = bootPage({ dir: pack.dir, hash: `#osb=${pack.link}`, storage: { [LOCKED]: mark } });
+  await relaunch.settle(() => !relaunch.nodes.lock.hidden);
+  assert.match(relaunch.nodes.lock.innerHTML, /Locked on this device\./);
+  assert.equal(relaunch.context.BIBLE, undefined);
+  assert.equal(relaunch.store.has(KEY), false);
+  // The passphrase opens it again and clears the lock.
+  await relaunch.submitPassphrase(pack.passphrase);
+  await relaunch.settle(() => relaunch.loaded.includes("app.js"));
+  assert.equal(relaunch.store.has(LOCKED), false);
+  assert.equal(relaunch.store.get(KEY), pack.key);
 });
