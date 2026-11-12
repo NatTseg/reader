@@ -161,6 +161,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v40",
         "reader-v41",
         "reader-v42",
+        "reader-v43",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -181,7 +182,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {

@@ -178,12 +178,14 @@ function renderToday(key = todayKey || localDayKey()) {
     pane.innerHTML = html; return;
   }
   const carry = verseToCarry(day);
-  if (key === today && state.book && bookMeta(state.book)) html += `<button class="continue-reading" data-tab-open="bible"><small>Continue reading</small><strong>${esc(refLabel(state.book, state.chapter))}</strong><span>${Math.round((state.scroll || 0) * 100)}% ›</span></button>`;
-  if (carry) html += `<section class="carry"><p class="eyebrow">Verse to carry today</p><blockquote>${esc(carry.text)}</blockquote>
-    <p class="carry-ref">${esc(carry.label)}</p><div class="actions"><button class="primary" data-carry-practice="true">Practice</button>
-    <button class="secondary" data-carry-memorize="true">${(state.memory || []).some(item => item.id === memoryId(carry.passages)) ? "✓ In memory" : "Add to memory"}</button></div></section>`;
+  if (key === today && state.book && bookMeta(state.book) && state.scroll > 0.03 && state.scroll < 0.92) html += `<button class="continue-reading" data-tab-open="bible"><small>Continue reading</small><strong>${esc(refLabel(state.book, state.chapter))}</strong><span>${Math.round((state.scroll || 0) * 100)}% ›</span></button>`;
+  if (carry) {
+    const kept = (state.memory || []).some(item => item.id === memoryId(carry.passages));
+    html += `<section class="carry"><blockquote>${esc(carry.text)}</blockquote><div class="carry-foot"><span class="carry-ref">${esc(carry.label)}</span>
+      <span class="carry-actions"><button class="text-button" data-carry-practice="true">Practice</button><button class="text-button" data-carry-memorize="true">${kept ? "✓ Kept" : "Keep"}</button></span></div></section>`;
+  }
   html += planHtml(key === today);
-  html += `<div class="today-stats"><span><strong>${streak}</strong> day${streak === 1 ? "" : "s"} in a row</span><button class="text-button" data-memory-review="true" ${due.length ? "" : "disabled"}>${due.length ? `Review ${due.length} memory verse${due.length === 1 ? "" : "s"} ›` : `${(state.memory || []).length} memory verses · none due`}</button></div>`;
+  if (due.length) html += `<button class="today-review" data-memory-review="true"><span>Review ${due.length} memory verse${due.length === 1 ? "" : "s"}</span>${streak > 1 ? `<small>${streak} days in a row</small>` : ""}</button>`;
   const done = new Set(dayDone(key));
   const readingCard = (sectionTitle, sub, reading, index) => {
     const id = readingId(sectionTitle, sub.title, index), passages = reading.filter(p => p.verses.length);
@@ -212,7 +214,7 @@ function renderToday(key = todayKey || localDayKey()) {
 function planHtml(isToday) {
   if (!isToday || typeof nextPlanDay !== "function") return "";
   const next = nextPlanDay();
-  if (!next) return `<button class="text-button plan-start" data-plan-choose="true">Start a reading plan ›</button>`;
+  if (!next) return "";
   const {plan, days, index, day} = next;
   if (!day) return `<section class="plan-card"><p class="eyebrow">${esc(planName(plan.id))}</p><p>All ${days.length} days complete. <button class="text-button" data-plan-choose="true">Choose another plan ›</button></p></section>`;
   const read = new Set(plan.read || []);

@@ -399,8 +399,10 @@ function selectTab(tab) {
   state.tab = tab;
   $("chapterBar").hidden = tab !== "bible";
   $("chapterTools").hidden = tab !== "bible";
+  // Saved verses and prayers live inside Library.
+  const nav = ["saved", "prayers"].includes(tab) ? "library" : tab;
   document.querySelectorAll("[data-tab]").forEach((b) => {
-    if (b.dataset.tab === tab) b.setAttribute("aria-current", "page");
+    if (b.dataset.tab === nav) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
   });
 }
@@ -596,7 +598,7 @@ function renderPrayers() {
   cancelBackSlide();
   const prayer = window.PRAYERS.find((p) => p.id === selectedPrayer);
   if (!prayer) {
-    pane.innerHTML = `<div class="content"><p class="eyebrow">Daily prayer</p><h1>Prayer Book</h1><div class="prayer-list">${window.PRAYERS.map((p) => `<button class="topic" data-prayer="${p.id}"><span>${esc(p.title)}</span>${icon("right")}</button>`).join("")}</div></div>`;
+    pane.innerHTML = `<div class="content"><button class="text-button" data-tab-open="library">‹ Library</button><h1>Prayers</h1><div class="prayer-list">${window.PRAYERS.map((p) => `<button class="topic" data-prayer="${p.id}"><span>${esc(p.title)}</span>${icon("right")}</button>`).join("")}</div></div>`;
     pane.scrollTop = prayerListTop;
     return;
   }
@@ -634,7 +636,7 @@ function renderSaved() {
           ? !!state.highlights[k]
           : !!state.comments[k]),
   );
-  pane.innerHTML = `<div class="content"><p class="eyebrow">Your collection</p><h1>Saved verses</h1><div class="filters" aria-label="Filter saved verses">${[
+  pane.innerHTML = `<div class="content"><button class="text-button" data-tab-open="library">‹ Library</button><h1>Saved verses</h1><div class="filters" aria-label="Filter saved verses">${[
     ["all", "All"],
     ["bookmarks", "Bookmarks"],
     ["highlights", "Highlights"],
@@ -787,6 +789,7 @@ function backAction() {
       selectedPrayer = null;
       renderPrayers();
     };
+  if (state.tab === "saved" || state.tab === "prayers") return () => openTab("library");
   return null;
 }
 bindChapterSwipe(pane, false);
@@ -1022,7 +1025,7 @@ function jumpNote(book, ch, v) {
 function showSettings() {
   openDialog(
     "Reading settings",
-    `<div class="setting"><span>Text size</span><div class="stepper"><button class="secondary" id="fontDown" aria-label="Decrease text size">A−</button><span id="fontValue">${state.font}</span><button class="secondary" id="fontUp" aria-label="Increase text size">A+</button></div></div><div class="setting"><span>Appearance</span><button class="secondary" id="themeToggle" aria-label="Dark mode" aria-pressed="${state.theme === "dark"}">${state.theme === "dark" ? "Dark" : "Light"}</button></div>${[
+    `${[
       ["showPreamble", "Book introductions"],
       ["showNotes", "Study notes"],
       ["openTodayFirst", "Open Today first each day"],
@@ -1033,7 +1036,7 @@ function showSettings() {
       )
       .join(
         "",
-      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${typeof osbSettingsHtml === "function" ? osbSettingsHtml() : ""}<details class="import-file"><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Text: <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">World English Bible</a></p>`,
+      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${typeof osbSettingsHtml === "function" ? osbSettingsHtml() : ""}<details class="import-file" ${osbPackState === "unlocked" ? "hidden" : ""}><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Text: <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">World English Bible</a></p>`,
   );
   bindReaderToolsSettings();
   $("personalNotesFile").onchange = importPersonalNotes;
@@ -1050,9 +1053,7 @@ function showSettings() {
     $("fontValue").textContent = state.font;
     persist();
   };
-  $("fontDown").onclick = () => font(-1);
-  $("fontUp").onclick = () => font(1);
-  $("themeToggle").onclick = () => {
+  if ($("themeToggle")) $("themeToggle").onclick = () => {
     state.theme = state.theme === "dark" ? "light" : "dark";
     applyAppearance();
     persist();
@@ -1170,7 +1171,7 @@ $("home").onclick = (e) => {
   openTab("bible");
 };
 $("search").onclick = showSearch;
-$("settings").onclick = showSettings;
+
 $("textSettings").onclick = () => showTextSettings();
 $("books").onclick = showBooks;
 $("openChapterDrawer").onclick = showChapterDrawer;

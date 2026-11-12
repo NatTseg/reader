@@ -145,11 +145,11 @@ function personalContextStatus() {
     : "Your Orthodox Study Bible notes are not open on this device yet.";
 }
 function showContextLibrary(settingsSnapshot) {
-  const parentView = settingsSnapshot || captureSwipeView(dialog);
-  openDialog("OSB reading context", `<button class="text-button" id="contextBack">‹ Reading settings</button><h3 class="section-label">Reading guides</h3><div class="context-list">${personalGuides.map((g, i) => `<button class="topic" data-context-guide="${i}" data-context-parent="library"><span>${esc(g.title)}</span>${icon("right")}</button>`).join("") || '<p class="helper">Import the updated study file to add the OSB guides.</p>'}</div><h3 class="section-label">Book introductions</h3><div class="context-list">${window.BIBLE.books.filter(b => personalIntroductions[b.id]).map(b => `<button class="topic" data-context-intro="${b.id}" data-context-parent="library"><span>${esc(displayName(b.id))}</span>${icon("right")}</button>`).join("")}</div>`);
-  dialogBack = showSettings;
-  dialogBackSnapshot = parentView;
-  $("contextBack").onclick = showSettings;
+  // From Library this opens on its own; from Reading settings it keeps a way back.
+  const fromSettings = !!settingsSnapshot || dialog.open;
+  const parentView = settingsSnapshot || (fromSettings ? captureSwipeView(dialog) : null);
+  openDialog("Orthodox Study Bible", `${fromSettings ? '<button class="text-button" id="contextBack">‹ Reading settings</button>' : ""}<h3 class="section-label">Reading guides</h3><div class="context-list">${personalGuides.map((g, i) => `<button class="topic" data-context-guide="${i}" data-context-parent="library"><span>${esc(g.title)}</span>${icon("right")}</button>`).join("") || '<p class="helper">Import the updated study file to add the OSB guides.</p>'}</div><h3 class="section-label">Book introductions</h3><div class="context-list">${window.BIBLE.books.filter(b => personalIntroductions[b.id]).map(b => `<button class="topic" data-context-intro="${b.id}" data-context-parent="library"><span>${esc(displayName(b.id))}</span>${icon("right")}</button>`).join("")}</div>`);
+  if (fromSettings) { dialogBack = showSettings; dialogBackSnapshot = parentView; $("contextBack").onclick = showSettings; }
 }
 function showStudyContext(kind, id, parent) {
   const article = kind === "guide" ? personalGuides[Number(id)] : personalIntroductions[id];

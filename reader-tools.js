@@ -48,10 +48,10 @@ function recordHistory(book=state.book,chapter=state.chapter,scroll=state.scroll
   state.history=[{book,chapter,scroll:Math.max(0,Math.min(1,scroll||0)),ts:Date.now()},...(state.history||[]).filter(x=>x.book!==book||x.chapter!==chapter)].slice(0,50);
 }
 function readerToolsSettingsHtml() {
-  return `<div class="setting"><label for="readingFont">Reading font</label><select id="readingFont">${[['serif','Georgia'],['book','Palatino'],['sans','System sans']].map(([id,name])=>`<option value="${id}" ${state.fontFamily===id?'selected':''}>${name}</option>`).join('')}</select></div><div class="setting"><label for="readingSpacing">Line spacing</label><input id="readingSpacing" type="range" min="1.4" max="2.4" step="0.05" value="${state.lineSpacing||1.85}"></div><div class="setting"><label for="readingPaper">Page tone</label><select id="readingPaper">${[['original','Original'],['warm','Warm'],['neutral','White']].map(([id,name])=>`<option value="${id}" ${state.paper===id?'selected':''}>${name}</option>`).join('')}</select></div><h3 class="section-label">Reading tools</h3><div class="context-list"><button class="text-button" id="recentPassages">Recent passages ›</button><button class="text-button" id="readingPlan">Reading plan ›</button><button class="text-button" id="focusReading">Enter focus mode ›</button></div>`;
+  return `<h3 class="section-label">Reading tools</h3><div class="context-list"><button class="text-button" id="recentPassages">Recent passages ›</button><button class="text-button" id="readingPlan">Reading plan ›</button><button class="text-button" id="focusReading">Enter focus mode ›</button></div>`;
 }
 function bindReaderToolsSettings() {
-  for (const [id,key] of [['readingFont','fontFamily'],['readingSpacing','lineSpacing'],['readingPaper','paper']]) $(id).onchange=event=>{rememberScroll();state[key]=key==='lineSpacing'?Number(event.target.value):event.target.value;applyReaderToolsAppearance();if(state.tab==='bible')renderChapter(state.scroll);persist()};
+  for (const [id,key] of [['readingFont','fontFamily'],['readingSpacing','lineSpacing'],['readingPaper','paper']]) if($(id)) $(id).onchange=event=>{rememberScroll();state[key]=key==='lineSpacing'?Number(event.target.value):event.target.value;applyReaderToolsAppearance();if(state.tab==='bible')renderChapter(state.scroll);persist()};
   $('recentPassages').onclick=showReadingHistory;
   $('readingPlan').onclick=()=>showReadingPlan();
   $('focusReading').onclick=()=>{openTab('bible');setFocusReading(true)};
@@ -179,7 +179,8 @@ function showTextSettings() {
     <div class="text-row"><span>Font</span>${seg("font", [["serif", "Georgia"], ["book", "Palatino"], ["sans", "Sans"]], state.fontFamily)}</div>
     <div class="text-row"><span>Spacing</span>${seg("spacing", [[1.6, "Compact"], [1.85, "Normal"], [2.15, "Airy"]], [1.6, 1.85, 2.15].reduce((a, b) => Math.abs(b - state.lineSpacing) < Math.abs(a - state.lineSpacing) ? b : a))}</div>
     <div class="text-row"><span>Page</span>${seg("paper", [["original", "Original"], ["warm", "Warm"], ["neutral", "White"]], state.paper)}</div>
-    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Dark"]], state.theme)}</div>`);
+    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Dark"]], state.theme)}</div>
+    <button class="text-button more-settings" data-open-settings="true">More settings ›</button>`);
   dialog.classList.add("text-sheet");
   // Every change applies at once and keeps the reader at the same place in the chapter.
   const apply = change => {

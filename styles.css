@@ -1220,3 +1220,22 @@ dialog.text-sheet { margin: auto auto 0; width: min(100%, 560px); border-radius:
 .chip-button:hover { border-color: var(--accent); color: var(--accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 input[type="range"], progress { accent-color: var(--accent); }
+
+/* Decluttered layout */
+.library-shortcuts .result { display: flex; align-items: center; justify-content: space-between; }
+.library-shortcuts .result small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.library-shortcuts { margin: 14px 0 6px; }
+.carry { padding: 14px 16px 10px; margin: 16px 0 12px; }
+.carry blockquote { font-size: calc(var(--fs) - 1px); line-height: 1.55; }
+.carry-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.carry-foot .carry-ref { margin: 0; }
+.carry-actions { display: flex; gap: 16px; }
+.carry-actions .text-button { padding: 4px 0; }
+.today-review { display: flex; align-items: baseline; justify-content: space-between; width: 100%; margin: 4px 0 8px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 14px; background: var(--soft); color: var(--accent); font-weight: 600; cursor: pointer; text-align: left; }
+.today-review small { color: var(--muted); font-weight: 400; }
+.more-settings { display: block; margin: 10px auto 0; }
+.library-shortcuts { gap: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.library-shortcuts .result { border: 0; border-radius: 0; margin: 0; min-height: 0; padding: 14px 16px; background: none; }
+.library-shortcuts .result + .result { border-top: 1px solid var(--line); }
+.library-shortcuts .result strong { font-weight: 500; color: var(--text); }
+.library-shortcuts + .book-tools { margin-top: 14px; }
