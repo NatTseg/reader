@@ -1,4 +1,4 @@
-const CACHE = "reader-v43";
+const CACHE = "reader-v44";
 const ASSETS = [
   "./",
   "./index.html",
@@ -16,6 +16,7 @@ const ASSETS = [
   "./library.js", "./library-formats.js", "./library-tools.js", "./library-backup.js", "./vendor/fflate/fflate.js", "./vendor/fflate/LICENSE",
   "./note-alignment.js",
   "./prayers-data.js",
+  "./agpeya-data.js",
   "./styles.css",
   "./bible-data.js",
   "./legacy-web-data.js",

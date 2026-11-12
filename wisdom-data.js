@@ -30,7 +30,7 @@ window.WISDOM = {categories: [
     {id: "forgiveness", title: "Conflict & forgiveness", tags: "forgive conflict reconciliation argument", refs: [["MAT", 18, 21, 22], ["COL", 3, 13], ["MAT", 6, 14, 15], ["EPH", 4, 32], ["MAT", 5, 23, 24], ["LUK", 6, 37], ["ROM", 12, 18], ["MAT", 18, 15]]},
     {id: "enemies", title: "Enemies & those who hurt you", tags: "enemy hurt betrayal abuse", refs: [["MAT", 5, 43, 48], ["LUK", 6, 27, 31], ["ROM", 12, 19, 21], ["LUK", 23, 34], ["PRO", 25, 21, 22], ["1PE", 3, 9], ["ACT", 7, 59, 60], ["PSA", 108, 4]]},
     {id: "friendship", title: "Friendship & fellowship", tags: "friends community church", refs: [["PRO", 17, 17], ["ECC", 4, 9, 10], ["JHN", 15, 12, 15], ["HEB", 10, 24, 25], ["PRO", 27, 17], ["ACT", 2, 42, 47], ["1SA", 18, 1], ["SIR", 6, 14, 16]]},
-    {id: "love", title: "Love — the measure of all", tags: "love charity", refs: [["1CO", 13, 1, 8], ["1JN", 4, 7, 12], ["JHN", 13, 34, 35], ["MAT", 22, 36, 40], ["ROM", 13, 8, 10], ["1JN", 4, 19, 21], ["JHN", 15, 13], ["COL", 3, 14]]},
+    {id: "love", title: "Love", tags: "love charity", refs: [["1CO", 13, 1, 8], ["1JN", 4, 7, 12], ["JHN", 13, 34, 35], ["MAT", 22, 36, 40], ["ROM", 13, 8, 10], ["1JN", 4, 19, 21], ["JHN", 15, 13], ["COL", 3, 14]]},
     {id: "neighbor", title: "The poor & the stranger", tags: "poor charity almsgiving stranger refugee neighbor", refs: [["MAT", 25, 35, 40], ["PRO", 19, 17], ["JAS", 2, 14, 17], ["LUK", 10, 30, 37], ["ISA", 58, 6, 10], ["1JN", 3, 17, 18], ["DEU", 15, 11], ["HEB", 13, 2]]},
     {id: "singleness", title: "Singleness & purity", tags: "single dating chastity purity", refs: [["1CO", 7, 32, 35], ["1TH", 4, 3, 5], ["PSA", 118, 9], ["MAT", 5, 8], ["1CO", 6, 18, 20], ["2TI", 2, 22], ["PHP", 4, 8], ["1CO", 7, 7, 8]]},
   ]},

@@ -1239,3 +1239,15 @@ input[type="range"], progress { accent-color: var(--accent); }
 .library-shortcuts .result + .result { border-top: 1px solid var(--line); }
 .library-shortcuts .result strong { font-weight: 500; color: var(--text); }
 .library-shortcuts + .book-tools { margin-top: 14px; }
+
+/* Prayers and the Agpeya */
+.hours-list .topic span { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.hours-list .topic small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.hours-list .topic strong { font-weight: 600; }
+.hours-list .topic.is-now { border-color: var(--accent); background: var(--soft); }
+.hours-list .topic em { font-style: normal; color: var(--accent); font-size: 12px; font-weight: 600; }
+.hour .prayer-text { margin-top: 8px; }
+.hour-heading { font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 32px 0 6px; }
+.hour-watch { font-size: 15px; color: var(--text); border-top: 1px solid var(--line); padding-top: 24px; }
+.hour-psalm { font: 600 calc(var(--fs) * .8)/1.35 var(--reading-font, Georgia, serif); margin: 22px 0 6px; }
+.hour-ref { color: var(--muted); font-size: 13px; margin: 0 0 4px; }

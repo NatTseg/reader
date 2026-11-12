@@ -400,7 +400,10 @@ function selectTab(tab) {
   $("chapterBar").hidden = tab !== "bible";
   $("chapterTools").hidden = tab !== "bible";
   // Saved verses and prayers live inside Library.
-  const nav = ["saved", "prayers"].includes(tab) ? "library" : tab;
+  // Library (with saved verses) opens from the header; it has no footer tab.
+  const nav = ["saved", "library"].includes(tab) ? "" : tab;
+  const libraryButton = $("libraryButton");
+  if (libraryButton?.setAttribute) libraryButton.setAttribute("aria-pressed", String(!nav));
   document.querySelectorAll("[data-tab]").forEach((b) => {
     if (b.dataset.tab === nav) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
@@ -594,21 +597,47 @@ function memorizeWisdomPassage(spec) {
 }
 let selectedPrayer = null;
 let prayerListTop = 0;
+// Prayers: the Agpeya hours (the current hour first in view) and the prayer book.
+function currentAgpeyaHour(date = new Date()) {
+  const h = date.getHours() + date.getMinutes() / 60;
+  return window.AGPEYA?.hours.find((x) => x.from < x.to ? h >= x.from && h < x.to : h >= x.from || h < x.to) || null;
+}
+function prayerHtml(id) {
+  const p = window.PRAYERS.find((x) => x.id === id);
+  if (!p) return "";
+  const text = p.book ? chapterText(p.book, p.chapter).slice(1).filter(Boolean).join("\n\n") : p.text;
+  return `<h2 class="hour-heading">${esc(p.title)}</h2><article class="prayer-text">${esc(text)}</article>`;
+}
+function hourPsalmsHtml(psalms) {
+  return psalms.map(([n, english, ch = n, from = 1, to]) => {
+    const verses = chapterText("PSA", ch);
+    const last = to || verses.length - 1;
+    return `<h3 class="hour-psalm">Psalm ${n}${english !== String(n) ? ` (${esc(english)})` : ""}</h3><div class="verses">${rangeHtml("PSA", ch, from, last)}</div>`;
+  }).join("");
+}
+function readingHtml(title, refs) {
+  return `<h2 class="hour-heading">${esc(title)}</h2>${refs.map(([b, c, v, e]) => `<p class="hour-ref">${esc(refLabel(b, c, v))}–${e}</p><div class="verses">${rangeHtml(b, c, v, e)}</div>`).join("")}`;
+}
+function renderHour(hour) {
+  const body = hour.watches
+    ? hour.watches.map((w) => `<h2 class="hour-heading hour-watch">${esc(w.name)}</h2><h2 class="hour-heading">Psalms</h2>${hourPsalmsHtml(w.psalms)}${readingHtml("Gospel", w.gospel)}`).join("")
+    : `${hour.epistle ? readingHtml("Epistle", [hour.epistle]) : ""}<h2 class="hour-heading">Psalms</h2>${hourPsalmsHtml(hour.psalms)}${readingHtml("Gospel", hour.gospel)}`;
+  pane.innerHTML = `<div class="content hour"><button class="text-button" id="allPrayers">‹ Prayers</button><p class="eyebrow">Agpeya · ${esc(hour.hour)}</p><h1>${esc(hour.name)}</h1>
+    ${window.AGPEYA.opening.map(prayerHtml).join("")}${body}${window.AGPEYA.closing.map(prayerHtml).join("")}</div>`;
+}
 function renderPrayers() {
   cancelBackSlide();
+  const hour = window.AGPEYA?.hours.find((h) => `hour:${h.id}` === selectedPrayer);
   const prayer = window.PRAYERS.find((p) => p.id === selectedPrayer);
-  if (!prayer) {
-    pane.innerHTML = `<div class="content"><button class="text-button" data-tab-open="library">‹ Library</button><h1>Prayers</h1><div class="prayer-list">${window.PRAYERS.map((p) => `<button class="topic" data-prayer="${p.id}"><span>${esc(p.title)}</span>${icon("right")}</button>`).join("")}</div></div>`;
+  if (!hour && !prayer) {
+    const now = currentAgpeyaHour();
+    pane.innerHTML = `<div class="content"><h1>Prayers</h1><h2 class="section-label">Agpeya</h2><div class="prayer-list hours-list">${(window.AGPEYA?.hours || []).map((h) => `<button class="topic${now?.id === h.id ? " is-now" : ""}" data-prayer="hour:${h.id}"><span><strong>${esc(h.name)}</strong><small>${esc(h.hour)} · ${esc(h.time)}</small></span>${now?.id === h.id ? '<em>Now</em>' : icon("right")}</button>`).join("")}</div>
+      <h2 class="section-label">Prayers</h2><div class="prayer-list">${window.PRAYERS.filter((p) => p.id !== "kyrie").map((p) => `<button class="topic" data-prayer="${p.id}"><span>${esc(p.title)}</span>${icon("right")}</button>`).join("")}</div></div>`;
     pane.scrollTop = prayerListTop;
     return;
   }
-  const text = prayer.book
-    ? chapterText(prayer.book, prayer.chapter)
-        .slice(1)
-        .filter(Boolean)
-        .join("\n\n")
-    : prayer.text;
-  pane.innerHTML = `<div class="content"><button class="text-button" id="allPrayers">‹ All prayers</button><p class="eyebrow">Prayer Book</p><h1>${esc(prayer.title)}</h1><article class="prayer-text">${esc(text)}</article></div>`;
+  if (hour) renderHour(hour);
+  else pane.innerHTML = `<div class="content"><button class="text-button" id="allPrayers">‹ Prayers</button><h1>${esc(prayer.title)}</h1><article class="prayer-text">${esc(prayer.book ? chapterText(prayer.book, prayer.chapter).slice(1).filter(Boolean).join("\n\n") : prayer.text)}</article></div>`;
   pane.scrollTop = 0;
   $("allPrayers").onclick = () => {
     selectedPrayer = null;
@@ -789,7 +818,7 @@ function backAction() {
       selectedPrayer = null;
       renderPrayers();
     };
-  if (state.tab === "saved" || state.tab === "prayers") return () => openTab("library");
+  if (state.tab === "saved") return () => openTab("library");
   return null;
 }
 bindChapterSwipe(pane, false);
@@ -798,7 +827,7 @@ function showChapters(book) {
   const parentView = captureSwipeView(dialog);
   openDialog(
     displayName(book),
-    `<button class="text-button" id="backBooks">‹ All books</button><p class="helper">Choose a chapter</p>${chapterListHtml(book)}`,
+    `<button class="text-button" id="backBooks">‹ All books</button>${chapterListHtml(book)}`,
   );
   dialogBack = showBooks;
   dialogBackSnapshot = parentView;
@@ -865,12 +894,12 @@ async function runSearch() {
   }
   if (/\d\s*:\s*\d/.test(query) || /^psalms?\s+\d+$/i.test(query)) {
     results.innerHTML =
-      '<p class="helper">That passage was not found. Check the chapter and verse numbers.</p>';
+      '<p class="helper">Passage not found.</p>';
     return;
   }
   if (query.length < 3) {
     results.innerHTML =
-      '<p class="helper">Use at least three letters to search for words.</p>';
+      '<p class="helper">Use at least three letters.</p>';
     return;
   }
   results.innerHTML = '<p class="helper">Searching…</p>';
@@ -888,7 +917,7 @@ async function runSearch() {
     if (found.length >= 80) break;
   }
   results.innerHTML =
-    `<p class="helper">${found.length === 80 ? "First 80 matches — narrow your phrase to see more." : found.length + " matching verses"}</p>` +
+    `<p class="helper">${found.length === 80 ? "First 80 matches" : found.length + " matching verses"}</p>` +
     found
       .map(
         (p) =>
@@ -981,7 +1010,7 @@ function showVerse(book, ch, v) {
   };
   $("copyVerse").onclick = async () => {
     try {
-      await navigator.clipboard.writeText(refLabel(book, ch, v) + " — " + verseText(book, ch, v));
+      await navigator.clipboard.writeText(verseText(book, ch, v) + "\n" + refLabel(book, ch, v));
       notify("Verse copied");
     } catch {
       notify("Copy unavailable. Select the verse text to copy it.");
@@ -1173,6 +1202,7 @@ $("home").onclick = (e) => {
 $("search").onclick = showSearch;
 
 $("textSettings").onclick = () => showTextSettings();
+$("libraryButton").onclick = () => openTab("library");
 $("books").onclick = showBooks;
 $("openChapterDrawer").onclick = showChapterDrawer;
 $("previous").onclick = () => nextChapter(-1);

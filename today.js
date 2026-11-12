@@ -195,7 +195,7 @@ function renderToday(key = todayKey || localDayKey()) {
     const first = passages.find(p => p.openable);
     return `<details class="reading-card${done.has(id) ? " is-done" : ""}"><summary><span class="reading-check" aria-hidden="true">${done.has(id) ? "✓" : ""}</span>
       <span><small>${esc(title)}</small><strong>${esc(passageLabel(passages))}</strong></span><span class="reading-min">${minutes} min</span></summary>
-      <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited} in English numbering (World English Bible).</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${esc(v.text)}</p>`).join("")}`).join("")}
+      <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited}, English numbering</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${esc(v.text)}</p>`).join("")}`).join("")}
       <div class="actions"><button class="${done.has(id) ? "secondary" : "primary"}" data-reading-done="${esc(id)}">${done.has(id) ? "Mark unread" : "Done reading"}</button>
       ${first ? `<button class="text-button" data-today-visit="${first.book}:${first.chapter}:${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.book === "PS2" ? "" : first.chapter} ›</button>` : ""}
       <button class="text-button" data-memorize-reading="${esc(id)}">Memorize a verse…</button></div></div></details>`;

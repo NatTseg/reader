@@ -25,6 +25,7 @@
     <script src="study-data.js" defer></script>
     <script src="wisdom-data.js" defer></script>
     <script src="prayers-data.js" defer></script>
+    <script src="agpeya-data.js" defer></script>
     <script src="personal-notes.js" defer></script>
     <script src="persistence.js" defer></script>
     <script src="cloud-config.js" defer></script>
@@ -49,7 +50,7 @@
           class="brand"
           href="#"
           id="home"
-          aria-label="Reader — return to reading"
+          aria-label="Reader"
           ><img src="fish.svg" width="30" height="30" alt="" /></a
         >
         <div class="header-actions">
@@ -59,6 +60,13 @@
             aria-label="Text size and appearance"
             title="Text size and appearance"
           >Aa</button
+          ><button
+            class="icon-button"
+            id="libraryButton"
+            aria-label="Library: saved verses, memory verses, books"
+            title="Library"
+            data-icon="library"
+          ></button
           ><button
             class="icon-button"
             id="search"
@@ -95,8 +103,8 @@
         <div class="chapter-tools" id="chapterTools">
           <button
             id="openChapterDrawer"
-            aria-label="Open chapters — or swipe left"
-            title="Chapters — swipe left to open"
+            aria-label="Chapters"
+            title="Chapters"
             aria-haspopup="dialog"
             aria-controls="dialog"
           >
@@ -122,8 +130,8 @@
         <button data-tab="wisdom">
           <span data-icon="compass"></span>Wisdom
         </button>
-        <button data-tab="library">
-          <span data-icon="library"></span>Library
+        <button data-tab="prayers">
+          <span data-icon="prayer"></span>Prayers
         </button>
       </nav>
     </div>

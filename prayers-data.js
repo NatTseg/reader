@@ -41,4 +41,9 @@ window.PRAYERS = [
     book: "PSA",
     chapter: 50,
   },
+  {
+    id: "kyrie",
+    title: "Lord, have mercy",
+    text: "Lord, have mercy. Lord, have mercy. Lord, have mercy.\n(41 times)",
+  },
 ];

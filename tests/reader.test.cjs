@@ -61,6 +61,7 @@ function reader(stored = {}) {
     "study-data.js",
     "wisdom-data.js",
     "prayers-data.js",
+    "agpeya-data.js",
   ])
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "personal-notes.js"), "utf8"), context);
@@ -162,6 +163,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v41",
         "reader-v42",
         "reader-v43",
+        "reader-v44",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -182,7 +184,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -268,8 +270,8 @@ test("viewport fit uses CSS full height except during keyboard input, preserving
 
 test('prayer book entries have unique IDs and available text', () => {
   const run = reader();
-  assert.equal(run('PRAYERS.length'), 8);
-  assert.equal(run('new Set(PRAYERS.map(p => p.id)).size'), 8);
+  assert.equal(run('PRAYERS.length'), 9);
+  assert.equal(run('new Set(PRAYERS.map(p => p.id)).size'), 9);
   assert.equal(run('PRAYERS.every(p => p.title && (p.text?.trim() || chapterText(p.book, p.chapter).length > 1))'), true);
 });
 
@@ -1340,4 +1342,23 @@ test('no screen or dialog shows uninterpolated template text', () => {
     assert.ok(!/\$\{|\bundefined\b|\bNaN\b|\[object Object\]/.test(html), `${name} contains template residue`);
   }
   assert.match(run('showBooks();$("dialogBody").innerHTML'),/How to read Scripture/);
+});
+
+test('every Agpeya hour has its Psalms and Gospel in this edition, and the current hour is found', () => {
+  const run=reader();
+  assert.equal(run('AGPEYA.hours.length'),7);
+  const missing=run(`JSON.stringify(AGPEYA.hours.flatMap(h=>[...(h.watches||[h])].flatMap(w=>[
+    ...w.psalms.filter(([n,e,ch=n,from=1,to])=>!verseText("PSA",ch,from)||(to&&!verseText("PSA",ch,to))).map(p=>h.id+" Ps "+p[0]),
+    ...w.gospel.filter(([b,c,v,e])=>!verseText(b,c,v)||!verseText(b,c,e)).map(g=>h.id+" "+g.join(" "))])))`);
+  assert.equal(missing,'[]');
+  assert.match(run('verseText("PSA",115,1)'),/well pleased/);
+  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,6,30)).id'),'prime');
+  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,23,30)).id'),'midnight');
+  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,2,0)).id'),'midnight');
+  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,17,0)).id'),'vespers');
+  run('loadPrefs({});state.tab="prayers";selectedPrayer="hour:none";renderPrayers();');
+  const html=run('pane.innerHTML');
+  assert.match(html,/Psalm 114 \(116:1–9\)/);
+  assert.match(html,/Luke 9:10–17/);
+  assert.match(html,/Prayer of Thanksgiving/);
 });
