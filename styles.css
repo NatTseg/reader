@@ -26,7 +26,7 @@
   --soft: #1c2030;
   --highlight: #4d4124;
   --rose: #4b2f35;
-  --paper: #263241;
+  --paper: #2a3a30;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -1305,3 +1305,11 @@ input[type="range"], progress { accent-color: var(--accent); }
 .today-remember em { font-style: normal; color: var(--accent); font-size: 13px; }
 .today-remember p { margin: 6px 0 0; font: 15px/1.4 var(--reading-font, Georgia, serif); }
 .main-reading .reading-card[open] summary { border-bottom: 0; }
+
+/* QA polish */
+dialog.swipe-settled { animation: none; }
+dialog.text-sheet { max-height: 80dvh; }
+.carry-foot { flex-wrap: wrap; }
+.carry-foot .carry-ref, .carry-actions .text-button { white-space: nowrap; }
+.drawer-sections button[aria-current] { color: var(--accent); font-weight: 600; background: var(--soft); }
+.wisdom-daily span { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }

@@ -290,7 +290,8 @@ function chapterText(book, ch) {
   return window.BIBLE.t[book]?.[ch - 1] || [];
 }
 function verseText(book, ch, v) {
-  return chapterText(book, ch)[sourceVerseStart(book, ch, v)] || "";
+  // The WEB source sometimes omits the space before an opening quote ("saying,“Who").
+  return (chapterText(book, ch)[sourceVerseStart(book, ch, v)] || "").replace(/([,.;:!?])([“‘])/g, "$1 $2");
 }
 function keyOf(book, ch, v) {
   return `${book}:${ch}:${v}`;
@@ -562,7 +563,7 @@ function renderWisdom() {
   if (!wisdomTopic) {
     const daily = wisdomTopicOfDay(), [b, c, v, end = v] = daily.refs[0];
     pane.innerHTML = `<div class="content wisdom"><h1>Wisdom</h1>
-      <button class="wisdom-daily" data-topic="${daily.id}"><small>For today · ${esc(daily.title)}</small><span>${esc(verseText(b, c, v))}</span><em>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</em></button>
+      <button class="wisdom-daily" data-topic="${daily.id}"><small>For today · ${esc(daily.title)}</small><span>${esc(Array.from({length: end - v + 1}, (_, i) => verseText(b, c, v + i)).filter(Boolean).join(" "))}</span><em>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</em></button>
       <label class="visually-hidden" for="wisdomFilter">Find a topic</label><input id="wisdomFilter" class="wisdom-filter" type="search" placeholder="Find a topic" autocomplete="off" value="${esc(wisdomFilter)}">
       <div id="wisdomList">${window.WISDOM.categories.map((cat) => `<section class="wisdom-category"><h2 class="section-label">${esc(cat.label)}</h2><div class="topic-grid">${cat.topics.map((t) => `<button class="topic" data-topic="${t.id}" data-search="${esc((t.title + " " + t.tags).toLowerCase())}"><span>${esc(t.title)}</span><small>${t.refs.length}</small>${icon("right")}</button>`).join("")}</div></section>`).join("")}<p class="helper" id="wisdomEmpty" hidden>No topics found.</p></div></div>`;
     const filter = () => {
@@ -655,7 +656,10 @@ function showHourDrawer() {
   openDialogAs("chapter-drawer", hour.name, groups.map((g) => `<h3 class="section-label">${esc(g.name)}</h3>${/Psalms$/.test(g.name)
     ? `<div class="chapter-grid">${g.items.map((x) => `<button data-hour-jump="${x.id}">${esc(x.label)}</button>`).join("")}</div>`
     : `<div class="drawer-sections">${g.items.map((x) => `<button data-hour-jump="${x.id}"><span>${esc(x.label)}</span></button>`).join("")}</div>`}`).join(""));
-  dialog.classList.add("chapter-drawer");
+  const paneTop = pane.getBoundingClientRect?.().top ?? 0;
+  const here = [...hourSections].reverse().find((x) => (document.getElementById(x.id)?.getBoundingClientRect?.().top ?? 1e9) <= paneTop + 60);
+  const mark = here && $("dialogBody").querySelector(`[data-hour-jump="${here.id}"]`);
+  if (mark?.setAttribute) { mark.setAttribute("aria-current", "true"); mark.scrollIntoView?.({block: "center"}); }
 }
 function renderPrayers() {
   cancelBackSlide();
@@ -751,6 +755,7 @@ function openDialog(title, html, back = null, kind = "") {
   dialogRefresh = null;
   const wanted = kind.split(/\s+/).filter(Boolean);
   for (const name of DIALOG_KINDS) dialog.classList.toggle(name, wanted.includes(name));
+  if (!dialog.open) dialog.classList.remove("swipe-settled");
   searchGeneration++;
   $("dialogTitle").textContent = title;
   $("dialogBody").innerHTML = html;
@@ -778,8 +783,9 @@ function captureDialogReturn() {
     dialog.scrollTop = top;
   }};
 }
-function showBooks() {
-  openDialog(
+// From the chapter drawer, the book list opens in the same drawer and goes back to its chapters.
+function showBooks(drawerBook = null) {
+  openDialogAs(drawerBook ? "chapter-drawer" : "",
     "Books & chapters",
     '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button>' + howToReadButton() + '</div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
   );
@@ -810,6 +816,7 @@ function showBooks() {
   };
   $("bookFilter").oninput = render;
   render();
+  if (drawerBook) dialogBack = () => showChapterDrawer(drawerBook);
   $("closeDialog").focus({ preventScroll: true });
 }
 function neighboringBook(book, direction) {
@@ -851,7 +858,7 @@ function showChapterDrawer(book = state.book) {
   $("drawerPreviousBook").onclick = () =>
     changeBook(previous, "drawerPreviousBook");
   $("drawerNextBook").onclick = () => changeBook(next, "drawerNextBook");
-  $("drawerAllBooks").onclick = showBooks;
+  $("drawerAllBooks").onclick = () => showBooks(book);
   dialog
     .querySelector('[aria-current="true"]')
     ?.scrollIntoView({ block: "center" });
@@ -885,7 +892,7 @@ function showChapters(book) {
   );
   dialogBack = showBooks;
   dialogBackSnapshot = parentView;
-  $("backBooks").onclick = showBooks;
+  $("backBooks").onclick = () => showBooks();
 }
 function parseRef(raw) {
   const s = raw.trim().toLowerCase();
@@ -1124,7 +1131,7 @@ function showSettings() {
   bindReaderToolsSettings();
   $("personalNotesFile").onchange = importPersonalNotes;
   if (typeof wireOsbSettings === "function") wireOsbSettings();
-  $("openStorage").onclick = showStorage;
+  $("openStorage").onclick = () => showStorage();
   $("openCloudSync").hidden = !cloudConfig();
   $("openCloudSync").onclick = showCloudSync;
   const font = (delta) => {
@@ -1191,7 +1198,13 @@ function handleAction(event) {
   if (typeof handleTodayAction === "function" && handleTodayAction(button)) return;
   if (button.dataset.contextLibrary) { showContextLibrary(); return; }
   if (button.dataset.openSettings) { showSettings(); return; }
-  if (button.dataset.jumpVerse) { closeDialog(); revealInPane(pane.querySelector(`[data-verse="${button.dataset.jumpVerse}"]`)); return; }
+  if (button.dataset.jumpVerse) {
+    closeDialog();
+    let target = pane.querySelector(`[data-verse="${button.dataset.jumpVerse}"]`);
+    while (target?.previousElementSibling?.classList.contains("osb-heading")) target = target.previousElementSibling;
+    revealInPane(target);
+    return;
+  }
   if (button.dataset.hourJump) { closeDialog(); revealInPane(document.getElementById(button.dataset.hourJump)); return; }
   if (button.dataset.contextGuide !== undefined) { showStudyContext("guide", button.dataset.contextGuide, button.dataset.contextParent); return; }
   if (button.dataset.contextIntro) { showStudyContext("intro", button.dataset.contextIntro, button.dataset.contextParent); return; }
@@ -1260,8 +1273,8 @@ $("search").onclick = showSearch;
 
 $("textSettings").onclick = () => showTextSettings();
 $("libraryButton").onclick = () => openTab("library");
-$("books").onclick = showBooks;
-$("openChapterDrawer").onclick = showChapterDrawer;
+$("books").onclick = () => showBooks();
+$("openChapterDrawer").onclick = () => showChapterDrawer();
 $("previous").onclick = () => nextChapter(-1);
 $("next").onclick = () => nextChapter(1);
 $("closeDialog").onclick = closeDialog;

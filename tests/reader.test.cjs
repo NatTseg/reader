@@ -167,6 +167,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v45",
         "reader-v46",
         "reader-v47",
+        "reader-v48",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -187,7 +188,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "reader-v47", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1418,4 +1419,31 @@ test('Today centres on the Gospel with the season and the Synaxarium commemorati
   assert.match(html,/More from today's Liturgy/);
   assert.ok(!/Vespers|Matins/.test(html));
   assert.ok(run('mainReading(katamerosDay("2027-04-26"))')!==null);
+});
+
+test('the chapters button opens the drawer even though clicks pass an event', () => {
+  const run=reader();
+  run(`dialog.showModal=()=>{dialog.open=true;};dialog.querySelector=()=>null;for(const id of ["closeDialog","drawerNextBook","drawerPreviousBook"])$(id).focus=()=>{};loadPrefs({});state.book="JHN";state.chapter=3;
+    $("openChapterDrawer").onclick({type:"click"});`);
+  assert.equal(run('$("dialogTitle").textContent'),run('displayName("JHN")'));
+});
+
+test('verses from the WEB source get a space before an opening quote', () => {
+  const run=reader();
+  assert.ok(!/[,.;:!?][“‘]/.test(run('verseText("MAT",16,13)')));
+  assert.match(run('verseText("MAT",16,13)'),/saying, “Who/);
+});
+
+test('a quick flick commits a back swipe and a thumb-arc swipe opens the drawer', () => {
+  const run=reader();
+  run(`window.committed=0;window.opened=0;beginBackSlide=()=>({width:390,update(){},cancel(){},finish(commit,action){if(commit)action();}});
+    showChapterDrawer=()=>opened++;window.handlers={};bindChapterSwipe({addEventListener(n,f){handlers[n]=f;}},false);
+    state.tab='wisdom';wisdomTopic=WISDOM.categories[0].topics[0];renderWisdom=()=>committed++;
+    window.swipe=(points,dt)=>{const t0=Date.now();handlers.touchstart({touches:[{clientX:50,clientY:300}],target:{closest:()=>null}});
+      for(const [x,y] of points)handlers.touchmove({touches:[{clientX:50+x,clientY:300+y}],cancelable:true,preventDefault(){}});
+      const [lx,ly]=points.at(-1);handlers.touchend({changedTouches:[{clientX:50+lx,clientY:300+ly}]});};`);
+  run('Date.now=(()=>{let t=1e12;return()=>(t+=10);})();swipe([[20,0],[50,2],[90,3]]);');
+  assert.equal(run('committed'),1);
+  run('state.tab="bible";wisdomTopic=null;returnPlace=null;swipe([[-20,8],[-80,40],[-150,70]]);');
+  assert.equal(run('opened'),1);
 });

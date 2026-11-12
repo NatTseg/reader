@@ -77,6 +77,7 @@ function beginBackSlide(surface, parentSnapshot, dismissDialog) {
       surface.style.transition = savedTransition;
       surface.style.removeProperty('--back-progress');
       surface.classList.remove('swipe-dismiss', 'swipe-settling');
+      surface.classList.add('swipe-settled');
     }
     if (activeBackSlide === view) activeBackSlide = null;
   };
@@ -126,7 +127,7 @@ function backSnapshot() {
 }
 function bindChapterSwipe(surface, drawer) {
   let start = null, onBack = null, axis = null, view = null;
-  let distance = 0, peak = 0, suppressClickUntil = 0;
+  let distance = 0, peak = 0, suppressClickUntil = 0, lastMove = {x: 0, t: 0}, velocity = 0;
   const cancel = (animate = false) => {
     start = null;
     if (view) {
@@ -138,8 +139,8 @@ function bindChapterSwipe(surface, drawer) {
   };
   surface.addEventListener('touchstart', (event) => {
     if (activeBackSlide) {
-      if (!start && activeBackSlide.flush) activeBackSlide.flush(); else { cancel(); cancelBackSlide(); }
-      return;
+      if (start || !activeBackSlide.flush) { cancel(); cancelBackSlide(); return; }
+      activeBackSlide.flush();
     }
     start = null; axis = null; distance = 0; peak = 0; view = null;
     onBack = backAction();
@@ -149,12 +150,15 @@ function bindChapterSwipe(surface, drawer) {
     if ((window.visualViewport?.scale || 1) > 1.01) return;
     // Drags may start on list buttons (the click is suppressed afterwards), but not inside form fields.
     if (event.target.closest('input, textarea, select, [contenteditable]')) return;
-    start = {x: event.touches[0].clientX, y: event.touches[0].clientY};
+    start = {x: event.touches[0].clientX, y: event.touches[0].clientY, t: Date.now()};
+    lastMove = {x: start.x, t: start.t}; velocity = 0;
   }, {passive: true});
   surface.addEventListener('touchmove', (event) => {
     if (!start) return;
     if (event.touches.length !== 1) { cancel(true); return; }
     const dx = event.touches[0].clientX - start.x, dy = event.touches[0].clientY - start.y;
+    const now = Date.now(), x = event.touches[0].clientX;
+    if (now > lastMove.t) { velocity = (x - lastMove.x) / (now - lastMove.t); lastMove = {x, t: now}; }
     if (!axis && Math.max(Math.abs(dx), Math.abs(dy)) > 12) axis = Math.abs(dx) > Math.abs(dy) * 1.6 ? 'x' : 'y';
     if (axis === 'y') { cancel(); return; }
     if (axis !== 'x') return;
@@ -177,15 +181,18 @@ function bindChapterSwipe(surface, drawer) {
     if (String(window.getSelection?.() || '').trim()) { if (view) { view.finish(false, () => {}); view = null; } return; }
     if (view) {
       distance = Math.max(0, dx); peak = Math.max(peak, distance);
-      const commit = swipeDirection(dx, dy) === 1 && shouldCommitBack(distance, peak, view.width);
-      suppressClickUntil = Date.now() + 450;
+      // A quick flick commits even when it is short.
+      const flick = velocity > 0.6 && distance > 48 && Math.abs(dx) > Math.abs(dy) * 1.6;
+      const commit = (swipeDirection(dx, dy) === 1 && shouldCommitBack(distance, peak, view.width)) || flick;
+      // Only the click that ends this drag is swallowed; the next tap works.
+      suppressClickUntil = Date.now() + (commit ? 350 : 120);
       view.update(distance);
       view.finish(commit, onBack);
       view = null;
-    } else if (!drawer && swipeDirection(dx, dy) === -1 && Math.abs(dx) > Math.abs(dy) * 2.2) {
+    } else if (!drawer && axis === 'x' && dx <= -56) {
       // Swiping left opens the right-hand drawer: chapters in Read, sections in an Agpeya hour.
-      if (state.tab === 'bible') { suppressClickUntil = Date.now() + 400; showChapterDrawer(); }
-      else if (state.tab === 'prayers' && String(selectedPrayer || '').startsWith('hour:')) { suppressClickUntil = Date.now() + 400; showHourDrawer(); }
+      if (state.tab === 'bible') { suppressClickUntil = Date.now() + 150; showChapterDrawer(); }
+      else if (state.tab === 'prayers' && String(selectedPrayer || '').startsWith('hour:')) { suppressClickUntil = Date.now() + 150; showHourDrawer(); }
     }
   }, {passive: true});
   surface.addEventListener('touchcancel', () => cancel(true));

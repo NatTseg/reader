@@ -266,7 +266,7 @@ function toggleReadingDone(id) {
   persist();
   const top = pane.scrollTop; renderToday(todayKey); pane.scrollTop = top;
   pane.querySelector(`[data-reading-done="${CSS.escape(id)}"]`)?.closest("details")?.removeAttribute("open");
-  if (list.has(id) && wasComplete && !wasCompleteBefore) notify("Today's Liturgy readings are complete");
+  if (list.has(id) && wasComplete && !wasCompleteBefore) notify("Today's Gospel read");
 }
 function chooseMemoryVerse(id) {
   const passages = readingById(todayKey, id);
@@ -351,6 +351,7 @@ function handleTodayAction(button) {
     else { const added = addMemoryVerse(carry.passages); persist(); notify(added ? "Added to memory" : "Already in memory"); renderToday(todayKey); }
   } else if (data.tabOpen) openTab(data.tabOpen);
   else if (data.planChoose) showReadingPlan(true, undefined, null);
+  else if (data.memoryList) showMemoryList();
   else if (data.memoryReview) { if (memoryDue().length) showMemoryReview(); else showMemoryList(); }
   else return false;
   return true;

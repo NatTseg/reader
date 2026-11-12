@@ -178,7 +178,7 @@ function showTextSettings() {
   openDialogAs("text-sheet", "Text", `<div class="text-row"><span>Size</span><div class="stepper"><button class="secondary" id="quickFontDown" aria-label="Smaller text">A−</button><output id="quickFontValue">${state.font}</output><button class="secondary" id="quickFontUp" aria-label="Larger text">A+</button></div></div>
     <div class="text-row"><span>Font</span>${seg("font", [["serif", "Georgia"], ["book", "Palatino"], ["sans", "Sans"]], state.fontFamily)}</div>
     <div class="text-row"><span>Spacing</span>${seg("spacing", [[1.6, "Compact"], [1.85, "Normal"], [2.15, "Airy"]], [1.6, 1.85, 2.15].reduce((a, b) => Math.abs(b - state.lineSpacing) < Math.abs(a - state.lineSpacing) ? b : a))}</div>
-    <div class="text-row"><span>Page</span>${seg("paper", [["original", "Original"], ["warm", "Warm"], ["neutral", "White"]], state.paper)}</div>
+    ${state.theme === "light" ? `<div class="text-row"><span>Page</span>${seg("paper", [["original", "Original"], ["warm", "Warm"], ["neutral", "White"]], state.paper)}</div>` : ""}
     <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Gray"], ["night", "Dark"]], state.theme)}</div>
     <button class="text-button more-settings" data-open-settings="true">More settings ›</button>`);
   dialog.classList.add("text-sheet");
@@ -196,6 +196,7 @@ function showTextSettings() {
   for (const [name, key, parse] of [["font", "fontFamily", String], ["spacing", "lineSpacing", Number], ["paper", "paper", String], ["theme", "theme", String]]) {
     $("dialogBody").querySelectorAll(`[data-text-${name}]`).forEach(button => button.onclick = () => {
       apply(() => { state[key] = parse(button.dataset[`text${name[0].toUpperCase()}${name.slice(1)}`]); });
+      if (name === "theme") { showTextSettings(); return; }
       $("dialogBody").querySelectorAll(`[data-text-${name}]`).forEach(other => other.setAttribute("aria-pressed", String(other === button)));
     });
   }
