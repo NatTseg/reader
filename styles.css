@@ -1168,3 +1168,41 @@ body:has(#returnReading:not([hidden])) #toast { bottom: calc(150px + var(--safe)
 .continue-reading small { color: var(--muted); font-size: 12px; }
 .continue-reading strong { flex: 1; font-weight: 600; }
 .continue-reading span { color: var(--accent); font-size: 13px; }
+
+/* Compact verse sheet */
+dialog.verse-sheet { max-height: 58dvh; }
+dialog.verse-sheet::backdrop, dialog.text-sheet::backdrop { background: #15191422; backdrop-filter: none; }
+.verse-preview { margin: 4px 0 12px; font: calc(var(--fs) - 2px)/1.55 var(--reading-font, Georgia, serif); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.verse-actions { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.verse-action { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 46px; padding: 6px 2px; border: 0; border-radius: 10px; background: none; color: var(--text); font-size: 11px; cursor: pointer; }
+.verse-action .icon, .verse-action-mark { width: 22px; height: 22px; font-size: 17px; line-height: 22px; color: var(--muted); }
+.verse-action[aria-pressed="true"], .verse-action[aria-expanded="true"] { color: var(--accent); background: var(--soft); }
+.verse-action[aria-pressed="true"] .icon, .verse-action[aria-pressed="true"] .verse-action-mark { color: var(--accent); }
+.verse-swatch { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; margin: 0; }
+.verse-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.verse-comment { margin-top: 12px; }
+.verse-comment textarea { width: 100%; }
+.verse-related { margin-top: 12px; }
+.verse-related summary { cursor: pointer; color: var(--accent); font-size: 14px; padding: 6px 0; }
+
+/* Quick text settings */
+.text-settings-button { font: 600 17px/1 Georgia, serif; letter-spacing: -.02em; }
+dialog.text-sheet { margin: auto auto 0; width: min(100%, 560px); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); max-height: 52dvh; }
+.text-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.text-row:last-child { border-bottom: 0; }
+.text-row > span { color: var(--muted); font-size: 14px; flex: none; }
+.segmented { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.segmented button { border: 0; background: none; color: var(--text); padding: 8px 11px; font-size: 14px; cursor: pointer; min-height: 38px; }
+.segmented button + button { border-left: 1px solid var(--line); }
+.segmented button[aria-pressed="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+.stepper output { min-width: 26px; text-align: center; display: inline-block; font-variant-numeric: tabular-nums; }
+
+/* Reading plan on Today */
+.plan-card { margin: 14px 0 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, var(--bg)); }
+.plan-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.plan-head .eyebrow { margin: 0; }
+.plan-day { flex: none; color: var(--muted); font-size: 13px; }
+.plan-chapters { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.plan-chapter { padding: 8px 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; }
+.plan-chapter.is-read { color: var(--accent); border-color: var(--accent); background: var(--soft); }
+.plan-start { display: block; margin: 12px 0 4px; }

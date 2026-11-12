@@ -21,7 +21,8 @@ function normalizeReaderTools(reader) {
   reader.history=(Array.isArray(reader.history)?reader.history:[]).filter(x=>x && bookMeta(x.book) && Number.isInteger(x.chapter) && x.chapter>=1 && x.chapter<=bookMeta(x.book).n && Number.isFinite(x.scroll) && x.scroll>=0 && x.scroll<=1 && Number.isFinite(x.ts)).slice(0,50);
   const plan=reader.readingPlan;
   reader.readingPlan=plan && ['gospels','psalms','whole-bible'].includes(plan.id) && Array.isArray(plan.completed)
-    ? {id:plan.id,completed:[...new Set(plan.completed.filter(n=>Number.isInteger(n)&&n>=0&&n<(plan.id==='whole-bible'?365:30)))]}:null;
+    ? {id:plan.id,completed:[...new Set(plan.completed.filter(n=>Number.isInteger(n)&&n>=0&&n<(plan.id==='whole-bible'?365:30)))],
+      read:[...new Set((Array.isArray(plan.read)?plan.read:[]).filter(k=>typeof k==='string'&&/^[A-Z0-9]{3}:\d+$/.test(k)))].slice(-2000)}:null;
 }
 function applyReaderToolsAppearance() {
   const fonts={serif:'Georgia, "Times New Roman", serif',sans:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',book:'Palatino, "Palatino Linotype", Georgia, serif'};
@@ -72,6 +73,26 @@ function planDays(id) {
   const chapters=books.flatMap(book=>Array.from({length:bookMeta(book).n},(_,i)=>({book,ch:i+1})));
   const days=id==='whole-bible'?365:30;
   return Array.from({length:days},(_,i)=>chapters.slice(Math.floor(i*chapters.length/days),Math.floor((i+1)*chapters.length/days)));
+}
+// Reaching the end of a chapter in a plan marks it read; a day completes when all its chapters are read.
+function markPlanChapterRead(book, ch) {
+  const plan=state.readingPlan;
+  if(!plan) return null;
+  const id=`${book}:${ch}`, days=planDays(plan.id);
+  if(!days.some(day=>day.some(p=>p.book===book&&p.ch===ch))) return null;
+  plan.read=plan.read||[];
+  if(plan.read.includes(id)) return null;
+  plan.read.push(id);
+  let finished=null;
+  days.forEach((day,i)=>{ if(!plan.completed.includes(i)&&day.every(p=>plan.read.includes(`${p.book}:${p.ch}`))){plan.completed.push(i);finished=i;} });
+  persist();
+  if(finished!==null) notify(`Day ${finished+1} of ${planName(plan.id)} complete`);
+  return finished;
+}
+function nextPlanDay() {
+  const plan=state.readingPlan; if(!plan) return null;
+  const days=planDays(plan.id), index=days.findIndex((_,i)=>!plan.completed.includes(i));
+  return {plan, days, index, day: index<0?null:days[index]};
 }
 function planName(id) {return {'gospels':'The Gospels in 30 days','psalms':'Psalms in 30 days','whole-bible':'The Bible in 365 days'}[id]}
 function showReadingPlan(choose=false,day,parent=captureSwipeView(dialog)) {
@@ -148,4 +169,33 @@ function handleReaderToolAction(button) {
   else if(d.previewRef)showPassagePreview(d.previewRef,d.previewNote,!!d.previewSource,d.previewOrigin);
   else return false;
   return true;
+}
+
+// Quick text settings: a small sheet over the bottom of the page, so the text stays visible while it changes.
+function showTextSettings() {
+  const seg = (name, options, current) => `<div class="segmented" role="group" aria-label="${name}">${options.map(([value, label]) =>
+    `<button data-text-${name}="${value}" aria-pressed="${String(current) === String(value)}">${label}</button>`).join("")}</div>`;
+  openDialog("Text", `<div class="text-row"><span>Size</span><div class="stepper"><button class="secondary" id="quickFontDown" aria-label="Smaller text">A−</button><output id="quickFontValue">${state.font}</output><button class="secondary" id="quickFontUp" aria-label="Larger text">A+</button></div></div>
+    <div class="text-row"><span>Font</span>${seg("font", [["serif", "Georgia"], ["book", "Palatino"], ["sans", "Sans"]], state.fontFamily)}</div>
+    <div class="text-row"><span>Spacing</span>${seg("spacing", [[1.6, "Compact"], [1.85, "Normal"], [2.15, "Airy"]], [1.6, 1.85, 2.15].reduce((a, b) => Math.abs(b - state.lineSpacing) < Math.abs(a - state.lineSpacing) ? b : a))}</div>
+    <div class="text-row"><span>Page</span>${seg("paper", [["original", "Original"], ["warm", "Warm"], ["neutral", "White"]], state.paper)}</div>
+    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Dark"]], state.theme)}</div>`);
+  dialog.classList.add("text-sheet");
+  // Every change applies at once and keeps the reader at the same place in the chapter.
+  const apply = change => {
+    rememberScroll();
+    change();
+    applyAppearance();
+    if (state.tab === "bible") pane.scrollTop = state.scroll * (pane.scrollHeight - pane.clientHeight);
+    persist();
+  };
+  const step = delta => apply(() => { state.font = Math.max(16, Math.min(28, state.font + delta)); $("quickFontValue").textContent = state.font; });
+  $("quickFontDown").onclick = () => step(-1);
+  $("quickFontUp").onclick = () => step(1);
+  for (const [name, key, parse] of [["font", "fontFamily", String], ["spacing", "lineSpacing", Number], ["paper", "paper", String], ["theme", "theme", String]]) {
+    $("dialogBody").querySelectorAll(`[data-text-${name}]`).forEach(button => button.onclick = () => {
+      apply(() => { state[key] = parse(button.dataset[`text${name[0].toUpperCase()}${name.slice(1)}`]); });
+      $("dialogBody").querySelectorAll(`[data-text-${name}]`).forEach(other => other.setAttribute("aria-pressed", String(other === button)));
+    });
+  }
 }

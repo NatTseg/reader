@@ -183,6 +183,7 @@ function renderToday(key = todayKey || localDayKey()) {
     <p class="carry-ref">${esc(carry.label)}</p><div class="actions"><button class="primary" data-carry-practice="true">Practice</button>
     <button class="secondary" data-carry-memorize="true">${(state.memory || []).some(item => item.id === memoryId(carry.passages)) ? "✓ In memory" : "Add to memory"}</button></div>
     <p class="helper">${carry.liturgy ? "The Psalm of today's Liturgy" : "A Psalm from today's readings"}. Read it slowly, then say it from memory a few times during the day.</p></section>`;
+  html += planHtml(key === today);
   html += `<div class="today-stats"><span><strong>${streak}</strong> day${streak === 1 ? "" : "s"} in a row</span><button class="text-button" data-memory-review="true" ${due.length ? "" : "disabled"}>${due.length ? `Review ${due.length} memory verse${due.length === 1 ? "" : "s"} ›` : `${(state.memory || []).length} memory verses · none due`}</button></div>`;
   const done = new Set(dayDone(key));
   const readingCard = (sectionTitle, sub, reading, index) => {
@@ -210,6 +211,17 @@ function renderToday(key = todayKey || localDayKey()) {
     <label class="today-pref"><input type="checkbox" id="openTodayFirst" ${state.openTodayFirst !== false ? "checked" : ""}> Open Today first each day</label></div>`;
   pane.innerHTML = html;
   $("openTodayFirst").onchange = event => { state.openTodayFirst = event.target.checked; persist(); };
+}
+function planHtml(isToday) {
+  if (!isToday || typeof nextPlanDay !== "function") return "";
+  const next = nextPlanDay();
+  if (!next) return `<button class="text-button plan-start" data-plan-choose="true">Start a reading plan ›</button>`;
+  const {plan, days, index, day} = next;
+  if (!day) return `<section class="plan-card"><p class="eyebrow">${esc(planName(plan.id))}</p><p>All ${days.length} days complete. <button class="text-button" data-plan-choose="true">Choose another plan ›</button></p></section>`;
+  const read = new Set(plan.read || []);
+  return `<section class="plan-card"><div class="plan-head"><p class="eyebrow">${esc(planName(plan.id))}</p><span class="plan-day">Day ${index + 1} of ${days.length}</span></div>
+    <div class="plan-chapters">${day.map(p => `<button class="plan-chapter${read.has(`${p.book}:${p.ch}`) ? " is-read" : ""}" data-today-visit="${p.book}:${p.ch}:1">${read.has(`${p.book}:${p.ch}`) ? "✓ " : ""}${esc(refLabel(p.book, p.ch))}</button>`).join("")}</div>
+    <p class="helper">${plan.completed.length} of ${days.length} days complete · chapters tick off when you reach their end.</p></section>`;
 }
 function readingById(key, id) {
   const day = katamerosDay(key), [sectionTitle, subTitle, index] = id.split("|");
@@ -314,6 +326,7 @@ function handleTodayAction(button) {
     if (data.carryPractice) showPractice(carry.label, carry.text);
     else { const added = addMemoryVerse(carry.passages); persist(); notify(added ? "Added to your memory verses" : "Already in your memory verses"); renderToday(todayKey); }
   } else if (data.tabOpen) openTab(data.tabOpen);
+  else if (data.planChoose) showReadingPlan(true, undefined, null);
   else if (data.memoryReview) { if (memoryDue().length) showMemoryReview(); else showMemoryList(); }
   else return false;
   return true;

@@ -530,6 +530,8 @@ function renderChapter(scroll = 0) {
     : "";
   pane.innerHTML = `<div class="content"><p class="eyebrow">${esc(displayName(state.book))}</p><div class="chapter-heading"><h1>${state.book === "PS2" ? "Psalm 151" : "Chapter " + state.chapter}</h1><span>Tap a verse number to save</span></div><p class="translation-label">${isSeptuagint(state.book) ? "Septuagint · LXX2012" : "World English Bible · New Testament"}</p>${intro}<article class="verses">${rangeHtml(state.book, state.chapter)}</article><div class="chapter-end"><button class="secondary" data-direction="-1" ${!adjacent(-1) ? "disabled" : ""}>Previous</button><button class="secondary" data-direction="1" ${!adjacent(1) ? "disabled" : ""}>Next chapter</button></div>${notesHtml()}</div>`;
   pane.scrollTop = scroll * (pane.scrollHeight - pane.clientHeight);
+  // A chapter that fits on one screen is read as soon as it is shown.
+  if (typeof markPlanChapterRead === "function" && pane.scrollHeight && pane.scrollHeight <= pane.clientHeight + 40) markPlanChapterRead(state.book, state.chapter);
 }
 let wisdomListTop = 0;
 function returnToTopics() {
@@ -625,6 +627,11 @@ function closeDialog() {
     const top = pane.scrollTop;
     renderLibrary();
     pane.scrollTop = top;
+  } else if (state.tab === "today" && typeof renderToday === "function") {
+    // Plan and memory changes made in a dialog show up on Today.
+    const top = pane.scrollTop;
+    renderToday(todayKey || localDayKey());
+    pane.scrollTop = top;
   }
 }
 let dialogBack = null, dialogBackSnapshot = null, dialogRefresh = null;
@@ -635,7 +642,7 @@ function openDialog(title, html, back = null) {
   dialogBackSnapshot = null;
   dialogBack = back;
   dialogRefresh = null;
-  dialog.classList.remove("chapter-drawer", "note-sheet", "library-reader");
+  dialog.classList.remove("chapter-drawer", "note-sheet", "library-reader", "verse-sheet", "text-sheet");
   searchGeneration++;
   $("dialogTitle").textContent = title;
   $("dialogBody").innerHTML = html;
@@ -854,74 +861,69 @@ function refreshAnnotations() {
   });
   pane.scrollTop = top;
 }
+// A compact verse sheet: the verse stays in view; actions sit in one row; the comment opens on demand.
 function showVerse(book, ch, v) {
   const key = keyOf(book, ch, v);
+  const inMemory = () => typeof memoryId === "function" && (state.memory || []).some(item => item.id === `${book}:${ch}.${v}`);
+  const colors = [["gold", "Gold"], ["paper", "Sage"], ["rose", "Rose"]];
+  const related = relatedPassagesHtml(book, ch, v);
   openDialog(
     refLabel(book, ch, v),
-    `<blockquote>${esc(verseText(book, ch, v))}</blockquote><div class="actions"><button class="secondary" id="bookmarkVerse">${icon("bookmark")}${bookmarked(book, ch, v) ? "Unsave" : "Bookmark"}</button><button class="secondary" id="copyVerse">${icon("copy")}Copy verse</button><button class="secondary" id="memorizeVerse">Memorize</button></div><p class="section-label">Highlight</p><div class="highlight-picker">${[
-      ["gold", "Gold"],
-      ["paper", "Sage"],
-      ["rose", "Rose"],
-      ["", "Clear"],
-    ]
-      .map(
-        ([color, label]) =>
-          `<button class="${color ? "hl-" + color : ""}" data-color="${color}" aria-pressed="${(state.highlights[key] || "") === color}">${label}</button>`,
-      )
-      .join(
-        "",
-      )}</div><label class="section-label" style="display:block" for="comment">Your comment</label><textarea id="comment" placeholder="Something to remember…">${esc(state.comments[key] || "")}</textarea><div class="actions"><button class="primary" id="saveComment">Save comment</button><button class="secondary" id="deleteComment" ${!state.comments[key] ? "disabled" : ""}>Remove comment</button></div>`,
+    `<p class="verse-preview">${esc(verseText(book, ch, v))}</p>
+    <div class="verse-actions" role="toolbar" aria-label="Verse actions">
+      <button class="verse-action" id="bookmarkVerse" aria-pressed="${bookmarked(book, ch, v)}">${icon("bookmark")}<span>${bookmarked(book, ch, v) ? "Saved" : "Save"}</span></button>
+      ${colors.map(([color, label]) => `<button class="verse-swatch hl-${color}" data-color="${color}" aria-label="Highlight ${label}" aria-pressed="${state.highlights[key] === color}"></button>`).join("")}
+      <button class="verse-action" id="copyVerse">${icon("copy")}<span>Copy</span></button>
+      <button class="verse-action" id="memorizeVerse" aria-pressed="${inMemory()}"><span class="verse-action-mark" aria-hidden="true">✦</span><span>${inMemory() ? "In memory" : "Memorize"}</span></button>
+      <button class="verse-action" id="commentToggle" aria-expanded="${!!state.comments[key]}">${icon("note")}<span>Comment</span></button>
+    </div>
+    <div class="verse-comment" id="verseComment" ${state.comments[key] ? "" : "hidden"}><label class="visually-hidden" for="comment">Your comment</label><textarea id="comment" rows="3" placeholder="Something to remember… (saves as you type)">${esc(state.comments[key] || "")}</textarea><div class="actions"><button class="secondary" id="saveComment">Done</button><button class="text-button" id="deleteComment" ${!state.comments[key] ? "disabled" : ""}>Remove comment</button></div></div>
+    ${related ? `<details class="verse-related"><summary>Related passages</summary><div class="context-list">${related}</div></details>` : ""}`,
   );
-  const related = relatedPassagesHtml(book,ch,v);
-  if (related) $("dialogBody").insertAdjacentHTML("beforeend", `<h3 class="section-label">Related passages</h3><div class="context-list">${related}</div>`);
+  dialog.classList.add("note-sheet", "verse-sheet");
   $("bookmarkVerse").onclick = () => {
-    const idx = state.bookmarks.findIndex(
-      (b) => b.book === book && b.chapter === ch && b.verse === v,
-    );
+    const idx = state.bookmarks.findIndex((b) => b.book === book && b.chapter === ch && b.verse === v);
     if (idx >= 0) state.bookmarks.splice(idx, 1);
     else state.bookmarks.push({ book, chapter: ch, verse: v, ts: Date.now() });
     persist();
     refreshAnnotations();
-    $("bookmarkVerse").innerHTML =
-      icon("bookmark") + (idx >= 0 ? "Bookmark" : "Unsave");
+    $("bookmarkVerse").setAttribute("aria-pressed", String(idx < 0));
+    $("bookmarkVerse").querySelector("span").textContent = idx >= 0 ? "Save" : "Saved";
     notify(idx >= 0 ? "Bookmark removed" : "Verse bookmarked");
   };
-  $("dialogBody")
-    .querySelectorAll("[data-color]")
-    .forEach(
-      (btn) =>
-        (btn.onclick = () => {
-          if (btn.dataset.color) state.highlights[key] = btn.dataset.color;
-          else delete state.highlights[key];
-          persist();
-          refreshAnnotations();
-          $("dialogBody")
-            .querySelectorAll("[data-color]")
-            .forEach((b) => b.setAttribute("aria-pressed", b === btn));
-        }),
-    );
-  // Comments save as you type, so closing the sheet never loses a draft.
-  let draftTimer;
-  $("comment").oninput = () => {
-    clearTimeout(draftTimer);
-    draftTimer = setTimeout(() => {
-      const text = $("comment")?.value.trim();
-      if (text === undefined) return;
-      if (text) state.comments[key] = text; else delete state.comments[key];
-      persist(); refreshAnnotations();
-      if ($("deleteComment")) $("deleteComment").disabled = !text;
-    }, 350);
-  };
-  $("saveComment").onclick = () => {
-    const text = $("comment").value.trim();
-    if (text) state.comments[key] = text;
-    else delete state.comments[key];
+  // Tapping the current colour again clears it.
+  $("dialogBody").querySelectorAll("[data-color]").forEach((btn) => (btn.onclick = () => {
+    if (state.highlights[key] === btn.dataset.color) delete state.highlights[key];
+    else state.highlights[key] = btn.dataset.color;
     persist();
     refreshAnnotations();
+    $("dialogBody").querySelectorAll("[data-color]").forEach((b) => b.setAttribute("aria-pressed", String(state.highlights[key] === b.dataset.color)));
+  }));
+  $("commentToggle").onclick = () => {
+    const box = $("verseComment");
+    box.hidden = !box.hidden;
+    $("commentToggle").setAttribute("aria-expanded", String(!box.hidden));
+    if (!box.hidden) $("comment").focus();
+  };
+  // Comments save as you type, so closing the sheet never loses a draft.
+  let draftTimer;
+  const saveDraft = () => {
+    const text = $("comment")?.value.trim();
+    if (text === undefined) return;
+    if (text) state.comments[key] = text; else delete state.comments[key];
+    persist(); refreshAnnotations();
+    if ($("deleteComment")) $("deleteComment").disabled = !text;
+  };
+  $("comment").oninput = () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 350); };
+  $("saveComment").onclick = () => {
+    clearTimeout(draftTimer);
+    const text = $("comment").value.trim();
+    saveDraft();
     closeDialog();
-    notify(text ? "Comment saved" : "Comment removed");
+    if (text) notify("Comment saved");
   };
   $("deleteComment").onclick = () => {
+    clearTimeout(draftTimer);
     delete state.comments[key];
     persist();
     refreshAnnotations();
@@ -929,13 +931,14 @@ function showVerse(book, ch, v) {
     notify("Comment removed");
   };
   $("memorizeVerse").onclick = () => {
-    notify(memorizeBibleVerse(book, ch, v) ? "Added to your memory verses. Review them from Today." : "Already in your memory verses");
+    const added = memorizeBibleVerse(book, ch, v);
+    $("memorizeVerse").setAttribute("aria-pressed", "true");
+    $("memorizeVerse").lastElementChild.textContent = "In memory";
+    notify(added ? "Added to your memory verses. Review them from Today." : "Already in your memory verses");
   };
   $("copyVerse").onclick = async () => {
     try {
-      await navigator.clipboard.writeText(
-        refLabel(book, ch, v) + " — " + verseText(book, ch, v),
-      );
+      await navigator.clipboard.writeText(refLabel(book, ch, v) + " — " + verseText(book, ch, v));
       notify("Verse copied");
     } catch {
       notify("Copy unavailable. Select the verse text to copy it.");
@@ -1102,6 +1105,7 @@ pane.addEventListener(
   () => {
     if (state.tab !== "bible") return;
     rememberScroll();
+    if (state.scroll >= 0.92 && typeof markPlanChapterRead === "function") markPlanChapterRead(state.book, state.chapter);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(persist, 250);
   },
@@ -1126,6 +1130,7 @@ $("home").onclick = (e) => {
 };
 $("search").onclick = showSearch;
 $("settings").onclick = showSettings;
+$("textSettings").onclick = () => showTextSettings();
 $("books").onclick = showBooks;
 $("openChapterDrawer").onclick = showChapterDrawer;
 $("previous").onclick = () => nextChapter(-1);

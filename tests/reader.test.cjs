@@ -156,6 +156,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v36",
         "reader-v37",
         "reader-v38",
+        "reader-v39",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -176,7 +177,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1270,4 +1271,36 @@ test('restoring a backup taken on Today shows Today', () => {
   const run=reader();
   run('loadPrefs({});window.rendered=null;renderToday=key=>{window.rendered=key;};renderTab("today");');
   assert.equal(run('rendered'),run('localDayKey()'));
+});
+
+test('reading plan days complete themselves as their chapters are read', () => {
+  const run=reader();
+  run('loadPrefs({});state.readingPlan={id:"gospels",completed:[],read:[]};window.day0=planDays("gospels")[0];');
+  const chapters=JSON.parse(run('JSON.stringify(day0)'));
+  for (const p of chapters.slice(0,-1)) run(`markPlanChapterRead("${p.book}",${p.ch})`);
+  assert.equal(run('state.readingPlan.completed.length'),0);
+  const last=chapters.at(-1);
+  assert.equal(run(`markPlanChapterRead("${last.book}",${last.ch})`),0);
+  assert.equal(run('nextPlanDay().index'),1);
+  assert.equal(run('markPlanChapterRead("GEN",1)'),null);
+  run('normalizeReaderTools(state);');
+  assert.ok(run('state.readingPlan.read.length')>=chapters.length);
+});
+
+test('the compact verse sheet toggles highlights and autosaves comments', () => {
+  const run=reader();
+  run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};loadPrefs({});showVerse("JHN",3,16);');
+  assert.match(run('$("dialogBody").innerHTML'),/verse-swatch hl-gold/);
+  assert.match(run('$("dialogTitle").textContent'),/John 3:16/);
+});
+
+test('quick text settings change size, font, and theme at once', () => {
+  const run=reader();
+  run(`dialog.showModal=()=>{dialog.open=true;};loadPrefs({});state.font=20;
+    const buttons={};$("dialogBody").querySelectorAll=sel=>{const m=sel.match(/data-text-(\\w+)/);return m?[{dataset:{["text"+m[1][0].toUpperCase()+m[1].slice(1)]:m[1]==="theme"?"dark":m[1]==="spacing"?"2.15":m[1]==="font"?"book":"warm"},setAttribute(){},set onclick(f){buttons[m[1]]=f;}}]:[]};
+    showTextSettings();$("quickFontUp").onclick();buttons.theme();buttons.font();buttons.spacing();`);
+  assert.equal(run('state.font'),21);
+  assert.equal(run('state.theme'),'dark');
+  assert.equal(run('state.fontFamily'),'book');
+  assert.equal(run('state.lineSpacing'),2.15);
 });
