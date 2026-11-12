@@ -119,6 +119,35 @@ for key, d in decisions.items():
         target = target if fit >= 0.12 else None
     decisions[key] = {"target": target, "method": "chapter-offset" if offset else "number", "score": round(fit, 3)} if target else {"target": None}
 
+# Last pass: a note still unplaced, or placed on weak evidence, may sit elsewhere in its book
+# (larger verse splits, reordered chapters). Search the whole book; move only on a clear match.
+def whole_book(book, text, exclude=None):
+    scores = []
+    for c, verses in enumerate(T.get(book, []), 1):
+        for n in range(1, len(verses)):
+            t = verses[n]
+            if t and f"{book}:{c}:{n}" != exclude:
+                scores.append((similarity(text, t), f"{book}:{c}:{n}"))
+    scores.sort(reverse=True)
+    return scores[:2]
+for key, d in decisions.items():
+    text = notes[key].get("sourceVerse", "")
+    if not text:
+        continue
+    weak = d.get("target") and d.get("method") in ("number", "chapter-offset") and d.get("score", 0) < 0.25
+    if d.get("target") and not weak:
+        continue
+    book = book_for(key.split(":")[0], 0)
+    top = whole_book(book, text)
+    if not top:
+        continue
+    best, second = top[0], (top[1] if len(top) > 1 else (0, None))
+    current = d.get("score", 0) if d.get("target") else 0
+    # Stay near the cited chapter (Jeremiah's Septuagint order is the exception) and require a clear match.
+    near = book == "JER" or abs(int(best[1].split(":")[1]) - int(key.split(":")[1])) <= 3
+    if near and best[0] >= 0.45 and best[0] - second[0] >= 0.1 and best[0] >= current + 0.2:
+        decisions[key] = {"target": best[1], "method": "book-text", "score": round(best[0], 3)}
+
 alignment = {"edition": bible["edition"], "version": 1, "notes": {}, "verses": {}, "evidence": {}, "candidates": {}}
 for key, d in decisions.items():
     if d.get("target"):

@@ -110,7 +110,7 @@ function showStudyNote(key,source=false,parent=captureDialogReturn()) {
   const note=source?personalSourceNotes[key]:window.STUDY?.notes?.[key];if(!note)return;
   studyNoteParent=parent;
   const p=parseKey(key),target=source?personalAlignment?.notes?.[key]:verifiedNoteTarget(key);
-  openDialogAs('note-sheet',target?`${refLabel(...Object.values(parseKey(target)))} · OSB note`:(/^[A-Z0-9]{3}:\d+:\d+$/.test(note.title||'')?`${refLabel(p.book,p.ch,p.v)} · OSB note`:note.title||'Study note'),`${parent?`<button class="text-button" id="noteBack">‹ ${esc(parent.title)}</button>`:''}<article class="footnote">${target&&target!==key?`<p class="helper">OSB numbering ${esc(key.split(':').slice(1).join(':'))}</p>`:target?'':`<p class="helper">OSB ${esc(key)}</p>`}<p class="note-body">${esc(note.body)}</p>${source?`<button class="text-button note-relink" data-review-note="${key}">${target?"Change verse link":"Link to a verse"}</button>`:""}</article>`);
+  openDialogAs('note-sheet',target?`${refLabel(...Object.values(parseKey(target)))} · OSB note`:(/^[A-Z0-9]{3}:\d+:\d+$/.test(note.title||'')?`${refLabel(p.book,p.ch,p.v)} · OSB note`:note.title||'Study note'),`${parent?`<button class="text-button" id="noteBack">‹ ${esc(parent.title)}</button>`:''}<article class="footnote">${target&&target!==key?`<p class="helper">OSB numbering ${esc(key.split(':').slice(1).join(':'))}</p>`:target?'':`<p class="helper">OSB ${esc(key)}</p>`}<p class="note-body">${esc(note.body)}</p></article>`);
   dialog.classList.add('note-sheet');
   if(parent){dialogBack=parent.show;dialogBackSnapshot=parent.snapshot;$('noteBack').onclick=parent.show;}
 }
