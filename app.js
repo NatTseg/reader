@@ -290,8 +290,16 @@ function chapterText(book, ch) {
   return window.BIBLE.t[book]?.[ch - 1] || [];
 }
 function verseText(book, ch, v) {
-  // The WEB source sometimes omits the space before an opening quote ("saying,“Who").
-  return (chapterText(book, ch)[sourceVerseStart(book, ch, v)] || "").replace(/([,.;:!?])([“‘])/g, "$1 $2");
+  return chapterText(book, ch)[sourceVerseStart(book, ch, v)] || "";
+}
+// Clean the bundled text once at load: LXX2012 marks plural "you" with a caret (you⌃), the sources
+// contain printing ligatures (ﬁ, ﬂ), and the WEB sometimes omits the space before an opening quote.
+function cleanScriptureText(text) {
+  return typeof text === "string" ? text.replace(/\u2303/g, "").replace(/\ufb01/g, "fi").replace(/\ufb02/g, "fl").replace(/([,.;:!?])([“‘])/g, "$1 $2") : text;
+}
+for (const source of [window.BIBLE?.t, window.LEGACY_WEB?.t]) {
+  const needsCleaning = /[\u2303\ufb01\ufb02]|[,.;:!?][“‘]/;
+  for (const chapters of Object.values(source || {})) for (const verses of chapters) for (let i = 0; i < verses.length; i++) if (needsCleaning.test(verses[i])) verses[i] = cleanScriptureText(verses[i]);
 }
 function keyOf(book, ch, v) {
   return `${book}:${ch}:${v}`;
