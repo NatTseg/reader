@@ -165,7 +165,8 @@ function bindChapterSwipe(surface, drawer) {
       distance = Math.max(0, dx); peak = Math.max(peak, distance);
       view.update(distance);
     }
-    if ((view || (!drawer && state.tab === 'bible' && dx < 0)) && event.cancelable) event.preventDefault();
+    const hourOpen = state.tab === 'prayers' && String(selectedPrayer || '').startsWith('hour:');
+    if ((view || (!drawer && (state.tab === 'bible' || hourOpen) && dx < 0)) && event.cancelable) event.preventDefault();
   }, {passive: false});
   surface.addEventListener('touchend', (event) => {
     if (!start) return;
@@ -181,9 +182,10 @@ function bindChapterSwipe(surface, drawer) {
       view.update(distance);
       view.finish(commit, onBack);
       view = null;
-    } else if (!drawer && swipeDirection(dx, dy) === -1 && Math.abs(dx) > Math.abs(dy) * 2.2 && state.tab === 'bible') {
-      suppressClickUntil = Date.now() + 400;
-      showChapterDrawer();
+    } else if (!drawer && swipeDirection(dx, dy) === -1 && Math.abs(dx) > Math.abs(dy) * 2.2) {
+      // Swiping left opens the right-hand drawer: chapters in Read, sections in an Agpeya hour.
+      if (state.tab === 'bible') { suppressClickUntil = Date.now() + 400; showChapterDrawer(); }
+      else if (state.tab === 'prayers' && String(selectedPrayer || '').startsWith('hour:')) { suppressClickUntil = Date.now() + 400; showHourDrawer(); }
     }
   }, {passive: true});
   surface.addEventListener('touchcancel', () => cancel(true));

@@ -1251,3 +1251,24 @@ input[type="range"], progress { accent-color: var(--accent); }
 .hour-watch { font-size: 15px; color: var(--text); border-top: 1px solid var(--line); padding-top: 24px; }
 .hour-psalm { font: 600 calc(var(--fs) * .8)/1.35 var(--reading-font, Georgia, serif); margin: 22px 0 6px; }
 .hour-ref { color: var(--muted); font-size: 13px; margin: 0 0 4px; }
+
+/* Right-hand drawer: chapters and Agpeya sections */
+.chapter-drawer #dialogBody { padding-top: 10px; }
+.drawer-books { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
+.drawer-book { flex: 1 1 0; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--text); font-size: 13px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.drawer-book:disabled { visibility: hidden; }
+.drawer-books .drawer-position { flex: none; margin: 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chapter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.chapter-grid button { aspect-ratio: 1; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: 500 15px/1 -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; cursor: pointer; padding: 0; }
+.chapter-grid button.visited { background: var(--soft); }
+.chapter-grid button[aria-current] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
+.chapter-grid button:active { transform: scale(.96); }
+.drawer-sections { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.drawer-sections button { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 11px 14px; border: 0; background: none; color: var(--text); text-align: left; font: 15px/1.35 var(--reading-font, Georgia, serif); cursor: pointer; }
+.drawer-sections button + button { border-top: 1px solid var(--line); }
+.drawer-sections small { flex: none; color: var(--muted); font: 12px -apple-system, sans-serif; font-variant-numeric: tabular-nums; }
+.drawer-all { display: block; margin: 18px auto 4px; }
+#drawerAllBooks { margin-top: 18px; }
+.hour-top { display: flex; align-items: center; justify-content: space-between; }
+.verse.flash, .flash { background: var(--soft); transition: background .3s; border-radius: 6px; }
+.drawer-book { min-height: 0; padding: 7px 10px; }

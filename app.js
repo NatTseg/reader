@@ -409,6 +409,12 @@ function selectTab(tab) {
     else b.removeAttribute("aria-current");
   });
 }
+// Scrolls a target into view and briefly marks it.
+function revealInPane(target) {
+  if (!target) return;
+  const run = () => { target.scrollIntoView({ block: "start" }); pane.scrollTop -= 12; target.classList.add("flash"); setTimeout(() => target.classList.remove("flash"), 1400); };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(run); else run();
+}
 // The single place that draws a tab's main view.
 function renderTab(tab = state.tab) {
   if (tab === "today" && typeof renderToday === "function") renderToday(localDayKey());
@@ -602,28 +608,54 @@ function currentAgpeyaHour(date = new Date()) {
   const h = date.getHours() + date.getMinutes() / 60;
   return window.AGPEYA?.hours.find((x) => x.from < x.to ? h >= x.from && h < x.to : h >= x.from || h < x.to) || null;
 }
-function prayerHtml(id) {
+// Each hour section gets an id so the section drawer can jump to it.
+let hourSections = [];
+function hourSection(label, group, html) {
+  const id = `hour-${hourSections.length}`;
+  hourSections.push({id, label, group});
+  return html.replace(/^<(h[23]) class="/, `<$1 id="${id}" class="`);
+}
+function prayerHtml(id, group = "Opening") {
   const p = window.PRAYERS.find((x) => x.id === id);
   if (!p) return "";
   const text = p.book ? chapterText(p.book, p.chapter).slice(1).filter(Boolean).join("\n\n") : p.text;
-  return `<h2 class="hour-heading">${esc(p.title)}</h2><article class="prayer-text">${esc(text)}</article>`;
+  return hourSection(p.title, group, `<h2 class="hour-heading">${esc(p.title)}</h2><article class="prayer-text">${esc(text)}</article>`);
 }
-function hourPsalmsHtml(psalms) {
+function hourPsalmsHtml(psalms, group) {
   return psalms.map(([n, english, ch = n, from = 1, to]) => {
     const verses = chapterText("PSA", ch);
     const last = to || verses.length - 1;
-    return `<h3 class="hour-psalm">Psalm ${n}${english !== String(n) ? ` (${esc(english)})` : ""}</h3><div class="verses">${rangeHtml("PSA", ch, from, last)}</div>`;
+    return hourSection(String(n), group, `<h3 class="hour-psalm">Psalm ${n}${english !== String(n) ? ` (${esc(english)})` : ""}</h3><div class="verses">${rangeHtml("PSA", ch, from, last)}</div>`);
   }).join("");
 }
-function readingHtml(title, refs) {
-  return `<h2 class="hour-heading">${esc(title)}</h2>${refs.map(([b, c, v, e]) => `<p class="hour-ref">${esc(refLabel(b, c, v))}–${e}</p><div class="verses">${rangeHtml(b, c, v, e)}</div>`).join("")}`;
+function readingHtml(title, refs, group = title) {
+  const [b, c, v] = refs[0], last = refs.at(-1);
+  const label = `${refLabel(b, c, v)}–${refs.length > 1 ? `${last[1]}:${last[3]}` : refs[0][3]}`;
+  return hourSection(label, group, `<h2 class="hour-heading">${esc(title)}</h2>${refs.map(([b, c, v, e]) => `<p class="hour-ref">${esc(refLabel(b, c, v))}–${e}</p><div class="verses">${rangeHtml(b, c, v, e)}</div>`).join("")}`);
 }
 function renderHour(hour) {
+  hourSections = [];
+  const opening = window.AGPEYA.opening.map((id) => prayerHtml(id, "Opening")).join("");
   const body = hour.watches
-    ? hour.watches.map((w) => `<h2 class="hour-heading hour-watch">${esc(w.name)}</h2><h2 class="hour-heading">Psalms</h2>${hourPsalmsHtml(w.psalms)}${readingHtml("Gospel", w.gospel)}`).join("")
-    : `${hour.epistle ? readingHtml("Epistle", [hour.epistle]) : ""}<h2 class="hour-heading">Psalms</h2>${hourPsalmsHtml(hour.psalms)}${readingHtml("Gospel", hour.gospel)}`;
-  pane.innerHTML = `<div class="content hour"><button class="text-button" id="allPrayers">‹ Prayers</button><p class="eyebrow">Agpeya · ${esc(hour.hour)}</p><h1>${esc(hour.name)}</h1>
-    ${window.AGPEYA.opening.map(prayerHtml).join("")}${body}${window.AGPEYA.closing.map(prayerHtml).join("")}</div>`;
+    ? hour.watches.map((w) => `<h2 class="hour-heading hour-watch">${esc(w.name)}</h2>${hourPsalmsHtml(w.psalms, `${w.name} · Psalms`)}${readingHtml("Gospel", w.gospel, `${w.name} · Gospel`)}`).join("")
+    : `${hour.epistle ? readingHtml("Epistle", [hour.epistle]) : ""}${hourPsalmsHtml(hour.psalms, "Psalms")}${readingHtml("Gospel", hour.gospel)}`;
+  const closing = window.AGPEYA.closing.map((id) => prayerHtml(id, "Closing")).join("");
+  pane.innerHTML = `<div class="content hour"><div class="hour-top"><button class="text-button" id="allPrayers">‹ Prayers</button><button class="icon-button" data-hour-sections="true" aria-label="Sections">${icon("chapters")}</button></div><p class="eyebrow">Agpeya · ${esc(hour.hour)}</p><h1>${esc(hour.name)}</h1>${opening}${body}${closing}</div>`;
+}
+// The hour's sections in the same right-hand drawer as chapters; psalms appear as a number grid.
+function showHourDrawer() {
+  const hour = window.AGPEYA?.hours.find((h) => `hour:${h.id}` === selectedPrayer);
+  if (!hour || !hourSections.length) return;
+  const groups = [];
+  for (const section of hourSections) {
+    let group = groups.find((g) => g.name === section.group);
+    if (!group) groups.push(group = {name: section.group, items: []});
+    group.items.push(section);
+  }
+  openDialog(hour.name, groups.map((g) => `<h3 class="section-label">${esc(g.name)}</h3>${/Psalms$/.test(g.name)
+    ? `<div class="chapter-grid">${g.items.map((x) => `<button data-hour-jump="${x.id}">${esc(x.label)}</button>`).join("")}</div>`
+    : `<div class="drawer-sections">${g.items.map((x) => `<button data-hour-jump="${x.id}"><span>${esc(x.label)}</span></button>`).join("")}</div>`}`).join(""));
+  dialog.classList.add("chapter-drawer");
 }
 function renderPrayers() {
   cancelBackSlide();
@@ -771,18 +803,26 @@ function neighboringBook(book, direction) {
   const index = order.indexOf(book);
   return index < 0 ? null : order[index + direction] || null;
 }
+// Chapters as a number grid: one tap to any chapter; visited chapters are marked lightly.
 function chapterListHtml(book) {
-  return `<div class="chapter-list">${Array.from({ length: bookMeta(book).n }, (_, i) => {
-    const current = state.book === book && state.chapter === i + 1;
-    return `<button data-chapter="${i + 1}" data-chapter-book="${book}" ${current ? 'aria-current="true"' : ""}><span>Chapter ${i + 1}</span>${current ? '<small>Reading</small>' : icon("right")}</button>`;
+  const visited = new Set((state.history || []).filter((h) => h.book === book).map((h) => h.chapter));
+  return `<div class="chapter-grid">${Array.from({ length: bookMeta(book).n }, (_, i) => {
+    const ch = i + 1, current = state.book === book && state.chapter === ch;
+    return `<button data-chapter="${ch}" data-chapter-book="${book}" aria-label="Chapter ${ch}${current ? ", reading" : ""}" ${current ? 'aria-current="true"' : visited.has(ch) ? 'class="visited"' : ""}>${book === "PS2" ? 151 : ch}</button>`;
   }).join("")}</div>`;
+}
+// OSB section headings in the chapter being read, for jumping within it.
+function chapterSectionsHtml(book, ch) {
+  const prefix = `${book}:${ch}:`;
+  const entries = Object.entries(personalHeadings || {}).filter(([key]) => key.startsWith(prefix)).map(([key, list]) => [Number(key.split(":")[2]), list]).sort((x, y) => x[0] - y[0]);
+  return entries.length ? `<h3 class="section-label">In this chapter</h3><div class="drawer-sections">${entries.map(([v, list]) => `<button data-jump-verse="${v}"><span>${esc(list.join(" · "))}</span><small>${v}</small></button>`).join("")}</div>` : "";
 }
 function showChapterDrawer(book = state.book) {
   const previous = neighboringBook(book, -1),
     next = neighboringBook(book, 1);
   openDialog(
     displayName(book),
-    `<p class="helper drawer-position">${book === state.book ? `Chapter ${state.chapter} of ${bookMeta(book).n}` : `${bookMeta(book).n} chapters`}</p><div class="drawer-books"><button class="secondary" id="drawerPreviousBook" ${previous ? "" : "disabled"}><span>‹ Previous book</span><small>${previous ? esc(displayName(previous)) : "First book"}</small></button><button class="secondary" id="drawerNextBook" ${next ? "" : "disabled"}><span>Next book ›</span><small>${next ? esc(displayName(next)) : "Last book"}</small></button></div><h3 class="section-label">Chapters</h3>${chapterListHtml(book)}<button class="text-button" id="drawerAllBooks">Browse all books ›</button>`,
+    `<div class="drawer-books"><button class="drawer-book" id="drawerPreviousBook" ${previous ? "" : "disabled"} aria-label="Previous book${previous ? ": " + esc(displayName(previous)) : ""}">‹ ${previous ? esc(displayName(previous)) : ""}</button><span class="drawer-position">${book === state.book ? `${state.chapter} of ${bookMeta(book).n}` : `${bookMeta(book).n} chapters`}</span><button class="drawer-book" id="drawerNextBook" ${next ? "" : "disabled"} aria-label="Next book${next ? ": " + esc(displayName(next)) : ""}">${next ? esc(displayName(next)) : ""} ›</button></div>${book === state.book ? chapterSectionsHtml(book, state.chapter) : ""}<h3 class="section-label">Chapters</h3>${chapterListHtml(book)}<button class="text-button drawer-all" id="drawerAllBooks">All books ›</button>`,
   );
   dialog.classList.add("chapter-drawer");
   // Browsing other books only changes the drawer; the reading position moves when a chapter is chosen.
@@ -800,7 +840,7 @@ function showChapterDrawer(book = state.book) {
   $("drawerAllBooks").onclick = showBooks;
   dialog
     .querySelector('[aria-current="true"]')
-    ?.scrollIntoView({ block: "nearest" });
+    ?.scrollIntoView({ block: "center" });
   $("closeDialog").focus({ preventScroll: true });
 }
 // Direction must be clearly horizontal; vertical scrolling and short movements do nothing.
@@ -1137,6 +1177,8 @@ function handleAction(event) {
   if (typeof handleTodayAction === "function" && handleTodayAction(button)) return;
   if (button.dataset.contextLibrary) { showContextLibrary(); return; }
   if (button.dataset.openSettings) { showSettings(); return; }
+  if (button.dataset.jumpVerse) { closeDialog(); revealInPane(pane.querySelector(`[data-verse="${button.dataset.jumpVerse}"]`)); return; }
+  if (button.dataset.hourJump) { closeDialog(); revealInPane(document.getElementById(button.dataset.hourJump)); return; }
   if (button.dataset.contextGuide !== undefined) { showStudyContext("guide", button.dataset.contextGuide, button.dataset.contextParent); return; }
   if (button.dataset.contextIntro) { showStudyContext("intro", button.dataset.contextIntro, button.dataset.contextParent); return; }
   if (button.dataset.legacyKey) { showLegacySaved(button.dataset.legacyKey); return; }
@@ -1165,7 +1207,8 @@ function handleAction(event) {
   } else if (button.dataset.filter) {
     savedFilter = button.dataset.filter;
     renderSaved();
-  } else if (button.dataset.wisdomMemorize) memorizeWisdomPassage(button.dataset.wisdomMemorize);
+  } else if (button.dataset.hourSections) showHourDrawer();
+  else if (button.dataset.wisdomMemorize) memorizeWisdomPassage(button.dataset.wisdomMemorize);
   else if (button.dataset.direction) nextChapter(+button.dataset.direction);
   else if (button.dataset.essay) showEssay(button.dataset.essay);
 }

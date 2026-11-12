@@ -164,6 +164,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v42",
         "reader-v43",
         "reader-v44",
+        "reader-v45",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -184,7 +185,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -537,7 +538,7 @@ test('chapter lists cover every chapter and mark only the current book and chapt
   const html = run('chapterListHtml("PSA")');
   assert.equal((html.match(/data-chapter=/g) || []).length, 150);
   assert.equal((html.match(/aria-current/g) || []).length, 1);
-  assert.ok(html.includes('Chapter 100</span><small>Reading'));
+  assert.ok(html.includes('aria-label="Chapter 100, reading" aria-current="true"'));
   assert.ok(!run('chapterListHtml("JHN")').includes('aria-current'));
 });
 
@@ -1361,4 +1362,20 @@ test('every Agpeya hour has its Psalms and Gospel in this edition, and the curre
   assert.match(html,/Psalm 114 \(116:1–9\)/);
   assert.match(html,/Luke 9:10–17/);
   assert.match(html,/Prayer of Thanksgiving/);
+});
+
+test('the chapter drawer lists OSB sections of the current chapter; an Agpeya hour lists its sections', () => {
+  const run=reader();
+  run(`dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};dialog.querySelector=()=>null;for(const id of ["closeDialog","drawerNextBook","drawerPreviousBook"])$(id).focus=()=>{};
+    loadPrefs({});state.book="MAT";state.chapter=5;personalHeadings={"MAT:5:1":["The Beatitudes"],"MAT:5:13":["Salt and Light"]};showChapterDrawer();`);
+  const html=run('$("dialogBody").innerHTML');
+  assert.match(html,/data-jump-verse="1"><span>The Beatitudes/);
+  assert.match(html,/data-jump-verse="13"/);
+  assert.equal((html.match(/data-chapter=/g)||[]).length,28);
+  run('state.tab="prayers";selectedPrayer="hour:terce";renderPrayers();showHourDrawer();');
+  const hour=run('$("dialogBody").innerHTML');
+  assert.match(hour,/Opening/);
+  assert.match(hour,/data-hour-jump="hour-\d+">19</);
+  assert.match(hour,/Gospel/);
+  assert.match(hour,/Closing/);
 });
