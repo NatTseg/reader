@@ -1025,6 +1025,7 @@ function showSettings() {
     `<div class="setting"><span>Text size</span><div class="stepper"><button class="secondary" id="fontDown" aria-label="Decrease text size">A−</button><span id="fontValue">${state.font}</span><button class="secondary" id="fontUp" aria-label="Increase text size">A+</button></div></div><div class="setting"><span>Appearance</span><button class="secondary" id="themeToggle" aria-label="Dark mode" aria-pressed="${state.theme === "dark"}">${state.theme === "dark" ? "Dark" : "Light"}</button></div>${[
       ["showPreamble", "Book introductions"],
       ["showNotes", "Study notes"],
+      ["openTodayFirst", "Open Today first each day"],
     ]
       .map(
         ([id, label]) =>

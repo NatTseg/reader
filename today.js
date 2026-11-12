@@ -206,9 +206,8 @@ function renderToday(key = todayKey || localDayKey()) {
   const others = day.sections.filter(section => section.title !== "Liturgy");
   if (others.length && !liturgy.length) html += others.map(section => `<h2 class="section-label">${esc(section.title)}</h2><div class="reading-list">${section.subs.map(sub => sub.readings.map((reading, i) => readingCard(section.title, sub, reading, i)).join("")).join("")}</div>`).join("");
   else if (others.length) html += `<details class="other-hours"><summary>${others.map(s => esc(s.title)).join(" & ")} readings</summary>${others.map(section => `<h3 class="section-label">${esc(section.title)}</h3><div class="reading-list">${section.subs.map(sub => sub.readings.map((reading, i) => readingCard(section.title, sub, reading, i)).join("")).join("")}</div>`).join("")}</details>`;
-  html += `    <label class="today-pref"><input type="checkbox" id="openTodayFirst" ${state.openTodayFirst !== false ? "checked" : ""}> Open Today first each day</label></div>`;
+  html += `</div>`;
   pane.innerHTML = html;
-  $("openTodayFirst").onchange = event => { state.openTodayFirst = event.target.checked; persist(); };
 }
 function planHtml(isToday) {
   if (!isToday || typeof nextPlanDay !== "function") return "";

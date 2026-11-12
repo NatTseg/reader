@@ -1133,7 +1133,6 @@ dialog.note-sheet { margin: auto auto 0; max-height: 65dvh; width: min(100%,640p
 .other-hours { margin-top: 18px; }
 .other-hours > summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 8px 0; }
 .today-source { margin-top: 26px; }
-.today-pref { display: flex; align-items: center; gap: 8px; margin: 10px 0 24px; color: var(--muted); font-size: 14px; }
 .practice-text { font: calc(var(--fs) + 2px)/2 var(--reading-font, Georgia, serif); margin: 10px 0 14px; }
 .practice-text .fw { white-space: nowrap; }
 .fade-word { display: inline-block; font: inherit; line-height: 1.25; min-height: 0; height: auto; margin: 0; border: 0; border-bottom: 2px solid var(--accent); background: var(--soft); color: var(--muted); border-radius: 4px; padding: 0 .3em; min-width: 1.6em; cursor: pointer; box-shadow: none; vertical-align: baseline; }
@@ -1220,3 +1219,4 @@ dialog.text-sheet { margin: auto auto 0; width: min(100%, 560px); border-radius:
 .chip-button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; }
 .chip-button:hover { border-color: var(--accent); color: var(--accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+input[type="range"], progress { accent-color: var(--accent); }
