@@ -292,15 +292,23 @@ summary {
 .hl-rose {
   background: var(--rose) !important;
 }
+/* Footnote and comment markers: a small raised dot or pencil after the verse, with a large tap area. */
 .note-link {
-  font: 11px sans-serif;
+  position: relative;
   border: 0;
   background: transparent;
   color: var(--accent);
-  padding: 8px;
-  min-height: 36px;
-  vertical-align: middle;
+  padding: 0 3px;
+  margin: 0;
+  min-height: 0;
+  line-height: 1;
+  vertical-align: .55em;
+  cursor: pointer;
 }
+.note-link::after { content: ""; position: absolute; inset: -14px -10px; }
+.note-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .85; }
+.comment-mark { font: 12px/1 -apple-system, sans-serif; color: var(--muted); }
+.note-link:focus-visible .note-dot { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chapter-end {
   border-top: 1px solid var(--line);
   margin-top: 32px;
