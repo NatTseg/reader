@@ -51,7 +51,12 @@ refused because their verse numbers differ.
 5. `scripts/deploy_pages.sh` runs the tests, copies only the files the app serves, checks again that no Bible or
    study text is among them, and publishes to the Pages repository.
 
-After any change to served files, raise `CACHE` in `sw.js`.
+After any change to served files, raise `CACHE` in `sw.js` (the deploy refuses otherwise).
+
+Saved verses are stored by book, chapter, and position under the edition id in `bible.json`. A rebuild must not
+move verses under the same id; if the numbering ever changes, change the id and write a migration, since older
+backups carry the old id. The unlock key lives in this browser's storage for the site's origin, which every page
+on the same `github.io` account shares.
 
 ## Checks the tests make
 
