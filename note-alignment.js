@@ -45,7 +45,11 @@ function showNoteLinkReview(key) {
   const noteParent=studyNoteParent;
   const suggestion=personalAlignment?.notes?.[key]||personalAlignment?.candidates?.[key]?.target;
   const initial=suggestion?parseKey(suggestion):{book:state.book,ch:state.chapter,v:1};
-  openDialog('Review this verse link',`<button class="text-button" id="reviewBack">‹ Study note</button><h3 class="section-label">OSB ${esc(key)}</h3><blockquote>${esc(note.sourceVerse||'No source verse text was included in this import.')}</blockquote><form id="noteLinkForm"><label for="noteLinkRef">Passage in this app</label><input id="noteLinkRef" value="${esc(refLabel(initial.book,initial.ch,initial.v))}" autocomplete="off"><blockquote id="noteLinkText"></blockquote><button class="primary" id="confirmNoteLink" type="submit">Confirm this verse link</button><button class="text-button" id="removeNoteLink" type="button">Leave this note unlinked</button></form>`);
+  // The OSB verse and this Bible's verse side by side, with two equal actions.
+  openDialogAs('note-sheet','Verse link',`<button class="text-button" id="reviewBack">‹ Note</button><form id="noteLinkForm" class="link-review">
+    <section class="link-card"><span class="link-label">Orthodox Study Bible · ${esc(key.split(':').slice(1).join(':'))}</span><p>${esc(note.sourceVerse||'No verse text in this import.')}</p></section>
+    <section class="link-card"><label class="link-label" for="noteLinkRef">This Bible</label><input id="noteLinkRef" value="${esc(refLabel(initial.book,initial.ch,initial.v))}" autocomplete="off"><p id="noteLinkText"></p></section>
+    <div class="link-actions"><button class="secondary" id="removeNoteLink" type="button">Unlink</button><button class="primary" id="confirmNoteLink" type="submit">Link</button></div></form>`);
   dialogBack=()=>showStudyNote(key,true,noteParent);dialogBackSnapshot=parent;$('reviewBack').onclick=dialogBack;
   const read=()=>{const p=parseRef($('noteLinkRef').value);return p?.v?p:null};
   const preview=()=>{const p=read();$('noteLinkText').textContent=p?verseText(p.book,p.ch,p.v):'Enter a valid book, chapter, and verse.';$('confirmNoteLink').disabled=!p};

@@ -1335,3 +1335,15 @@ dialog.text-sheet { max-height: 80dvh; }
 .drawer-sections button[aria-current] { color: var(--accent); font-weight: 600; background: var(--soft); }
 .wisdom-daily span { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .plural-you { font-size: .55em; vertical-align: .55em; color: var(--muted); margin-left: .5px; cursor: help; }
+
+/* Verse link review */
+.link-review { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.link-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
+.link-card p { margin: 6px 0 0; font: calc(var(--fs) - 2px)/1.55 var(--reading-font, Georgia, serif); }
+.link-label { display: block; color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.link-card input { width: 100%; margin-top: 6px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); }
+.link-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.link-actions button { min-height: 46px; border-radius: 12px; font-weight: 600; }
+.note-relink { font-size: 14px; margin-top: 4px; }
+dialog.note-sheet:has(.link-review) { max-height: 88dvh; }
+.link-actions { position: sticky; bottom: 0; padding: 10px 0 calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
