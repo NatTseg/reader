@@ -14,6 +14,7 @@ function visitRandomPassage() {
   notify(`Random passage · ${refLabel(passage.book, passage.ch, passage.v)}`);
 }
 function normalizeReaderTools(reader) {
+  if (typeof normalizeToday === "function") normalizeToday(reader);
   reader.fontFamily=['serif','sans','book'].includes(reader.fontFamily)?reader.fontFamily:'serif';
   reader.lineSpacing=Number.isFinite(reader.lineSpacing)?Math.max(1.4,Math.min(2.4,reader.lineSpacing)):1.85;
   reader.paper=['original','warm','neutral'].includes(reader.paper)?reader.paper:'original';

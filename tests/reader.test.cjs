@@ -67,6 +67,7 @@ function reader(stored = {}) {
   vm.runInContext(fs.readFileSync(path.join(root, "persistence.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "cloud-sync.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "reader-tools.js"), "utf8"), context);
+  for (const file of ["katameros-data.js", "today.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   for (const file of ["vendor/fflate/fflate.js", "library-formats.js", "library.js", "library-tools.js", "library-backup.js"])
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "note-alignment.js"), "utf8"), context);
@@ -153,6 +154,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v32",
         "reader-v35",
         "reader-v36",
+        "reader-v37",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -173,7 +175,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1140,4 +1142,85 @@ test('whole-book search skips an unreadable page and reports it', async () => {
     session.pdf.getPage=async n=>n===2 ? {...pageFor(n),getTextContent:async()=>{throw new Error('broken');}} : pageFor(n);`);
   await run('searchLibraryBook(session,"prayer")');
   assert.match(run('$("librarySearchStatus").textContent'),/2 matching pages.*1 page could not be searched/);
+});
+
+test('Coptic dates follow the Anno Martyrum calendar, including feasts and the Coptic leap year', () => {
+  const run=reader();
+  assert.equal(run('copticDate("2026-11-11").name'),'2 Hatour 1743');
+  assert.equal(run('copticDate("2027-01-07").name'),'29 Kiahk 1743');
+  assert.equal(run('copticDate("2026-09-11").name'),'1 Tout 1743');
+  assert.equal(run('copticDate("2027-09-11").name'),'6 Nasie 1743');
+  assert.equal(run('copticDate("2027-09-12").name'),'1 Tout 1744');
+});
+
+test('lectionary Psalms map from English to Septuagint numbering and Jeremiah keeps English chapters', () => {
+  const run=reader();
+  assert.equal(run('JSON.stringify(psalmToLxx(110,4))'),'[109,4]');
+  assert.equal(run('JSON.stringify(psalmToLxx(10,1))'),'[9,21]');
+  assert.equal(run('JSON.stringify(psalmToLxx(147,12))'),'[147,1]');
+  assert.equal(run('JSON.stringify(psalmToLxx(23,1))'),'[22,1]');
+  assert.match(run('lectionaryPassage([19,110,[4]]).verses[0].text'),/priest for ever/);
+  assert.equal(run('passageLabel([lectionaryPassage([19,110,[4,5,7]])])'),'Psalm 109(110):4–5, 7');
+  assert.match(run('lectionaryPassage([24,31,[31]]).verses[0].text'),/new covenant/);
+  assert.equal(run('lectionaryPassage([58,4,[14,15,16]]).verses.length'),3);
+});
+
+test('today shows the Katameros Liturgy in order with the Liturgy Psalm as the verse to carry', () => {
+  const run=reader();
+  run('loadPrefs({});window.day=katamerosDay("2026-11-11");');
+  assert.equal(run('day.coptic.name'),'2 Hatour 1743');
+  assert.deepEqual(JSON.parse(run('JSON.stringify(liturgyReadings(day).map(s=>s.title))')),['Pauline Epistle','Catholic Epistle','Acts of the Apostles','Psalm & Gospel']);
+  assert.equal(run('verseToCarry(day).label'),'Psalm 109(110):4–5, 7');
+  assert.equal(run('katamerosDay("2099-01-01")'),null);
+});
+
+test('completing every Liturgy reading builds a streak that tolerates an unread today', () => {
+  const run=reader();
+  run('loadPrefs({});state.today={done:{}};for(const key of ["2026-11-09","2026-11-10"]) state.today.done[key]=liturgyIds(katamerosDay(key));');
+  assert.equal(run('readingStreak("2026-11-11")'),2);
+  run('state.today.done["2026-11-11"]=liturgyIds(katamerosDay("2026-11-11")).slice(0,2);');
+  assert.equal(run('dayComplete("2026-11-11")'),false);
+  assert.equal(run('readingStreak("2026-11-11")'),2);
+  run('state.today.done["2026-11-11"]=liturgyIds(katamerosDay("2026-11-11"));');
+  assert.equal(run('readingStreak("2026-11-11")'),3);
+});
+
+test('memory verses advance through growing intervals and a miss returns tomorrow', () => {
+  const run=reader();
+  run('loadPrefs({});state.memory=[];addMemoryVerse([lectionaryPassage([43,3,[16]])],"2026-11-11");');
+  assert.equal(run('addMemoryVerse([lectionaryPassage([43,3,[16]])],"2026-11-11")'),false);
+  assert.equal(run('memoryDue("2026-11-11").length'),1);
+  assert.equal(run('reviewMemory(state.memory[0].id,true,"2026-11-11").due'),'2026-11-13');
+  assert.equal(run('reviewMemory(state.memory[0].id,true,"2026-11-13").due'),'2026-11-17');
+  assert.equal(run('reviewMemory(state.memory[0].id,false,"2026-11-17").due'),'2026-11-18');
+  assert.equal(run('state.memory[0].box'),0);
+});
+
+test('practice fading hides more words at each step and keeps punctuation visible', () => {
+  const run=reader();
+  const hidden=level=>run(`fadeWords("The Lord is my shepherd; I shall not want.",${level}).filter(p=>p.hidden).length`);
+  assert.equal(hidden(0),0);
+  assert.ok(hidden(1)>0 && hidden(1)<hidden(2));
+  assert.equal(hidden(3),9);
+  assert.equal(run('fadeWords("shepherd;",3)[0].after'),';');
+  assert.equal(run('fadeWords("shepherd;",3)[0].hint'),'s');
+});
+
+test('Today state survives backups and invalid entries are dropped', () => {
+  const run=reader();
+  run(`window.r={today:{done:{"2026-11-11":["Liturgy|Pauline Epistle|0"],"bad":["x"]}},memory:[{id:"JHN:3.16",label:"John 3:16",text:"For God so loved",box:2,due:"2026-11-20"},{id:1}]};normalizeToday(r);`);
+  assert.deepEqual(JSON.parse(run('JSON.stringify(Object.keys(r.today.done))')),['2026-11-11']);
+  assert.equal(run('r.memory.length'),1);
+  assert.equal(run('backupReader({...r,tab:"today"}).memory.length'),1);
+});
+
+test('every Katameros reading through 2030 resolves to verse text in this edition', () => {
+  const run=reader();
+  const result=JSON.parse(run(`(()=>{let total=0,empty=[],partial=0;
+    for(const set of window.KATAMEROS.sets)for(const [,subs] of set)for(const [,readings] of subs)for(const reading of readings)for(const ref of reading){
+      total++;const p=lectionaryPassage(ref);if(!p||!p.verses.length)empty.push(ref.slice(0,2).join(":"));else if(p.verses.length<ref[2].length)partial++;}
+    return JSON.stringify({total,empty,partial});})()`));
+  assert.ok(result.total>1000);
+  assert.deepEqual(result.empty,[]);
+  assert.ok(result.partial/result.total<0.03, `partial ${result.partial} of ${result.total}`);
 });

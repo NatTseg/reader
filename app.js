@@ -227,6 +227,7 @@ const pane = $("pane");
 const dialog = $("dialog");
 const icons = {
   prayer: '<path d="M12 3v18M6 8h12"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   chapters:
     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M7 8h4M7 12h4M7 16h4"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
@@ -375,8 +376,9 @@ function loadPrefs(override) {
     }
   }
   if (["bookmarks", "marks"].includes(state.tab)) state.tab = "saved";
-  if (!["bible", "wisdom", "prayers", "library", "saved"].includes(state.tab))
+  if (!["today", "bible", "wisdom", "prayers", "library", "saved"].includes(state.tab))
     state.tab = "bible";
+  if (typeof normalizeToday === "function") normalizeToday(state);
   state.theme = state.theme === "dark" ? "dark" : "light";
   if (typeof normalizeReaderTools === "function") normalizeReaderTools(state);
   applyAppearance();
@@ -415,7 +417,8 @@ function openTab(tab) {
   returnPlace = null;
   $("returnReading").hidden = true;
   selectTab(tab);
-  if (tab === "bible") renderChapter(state.scroll);
+  if (tab === "today") renderToday(localDayKey());
+  else if (tab === "bible") renderChapter(state.scroll);
   else if (tab === "wisdom") renderWisdom();
   else if (tab === "prayers") renderPrayers();
   else if (tab === "library") renderLibrary();
@@ -850,7 +853,7 @@ function showVerse(book, ch, v) {
   const key = keyOf(book, ch, v);
   openDialog(
     refLabel(book, ch, v),
-    `<blockquote>${esc(verseText(book, ch, v))}</blockquote><div class="actions"><button class="secondary" id="bookmarkVerse">${icon("bookmark")}${bookmarked(book, ch, v) ? "Unsave" : "Bookmark"}</button><button class="secondary" id="copyVerse">${icon("copy")}Copy verse</button></div><p class="section-label">Highlight</p><div class="highlight-picker">${[
+    `<blockquote>${esc(verseText(book, ch, v))}</blockquote><div class="actions"><button class="secondary" id="bookmarkVerse">${icon("bookmark")}${bookmarked(book, ch, v) ? "Unsave" : "Bookmark"}</button><button class="secondary" id="copyVerse">${icon("copy")}Copy verse</button><button class="secondary" id="memorizeVerse">Memorize</button></div><p class="section-label">Highlight</p><div class="highlight-picker">${[
       ["gold", "Gold"],
       ["paper", "Sage"],
       ["rose", "Rose"],
@@ -907,6 +910,9 @@ function showVerse(book, ch, v) {
     refreshAnnotations();
     closeDialog();
     notify("Comment removed");
+  };
+  $("memorizeVerse").onclick = () => {
+    notify(memorizeBibleVerse(book, ch, v) ? "Added to your memory verses. Review them from Today." : "Already in your memory verses");
   };
   $("copyVerse").onclick = async () => {
     try {
@@ -1027,6 +1033,7 @@ function handleAction(event) {
   if (!button) return;
   if (handleLibraryAction(button)) return;
   if (handleReaderToolAction(button)) return;
+  if (typeof handleTodayAction === "function" && handleTodayAction(button)) return;
   if (button.dataset.contextLibrary) { showContextLibrary(); return; }
   if (button.dataset.contextGuide !== undefined) { showStudyContext("guide", button.dataset.contextGuide, button.dataset.contextParent); return; }
   if (button.dataset.contextIntro) { showStudyContext("intro", button.dataset.contextIntro, button.dataset.contextParent); return; }
@@ -1046,7 +1053,7 @@ function handleAction(event) {
     else { const note=noteAt(p.book,p.ch,p.v); showStudyNote(note?.sourceKey || keyOf(p.book,p.ch,p.v),!!note?.sourceKey); }
   } else if (button.dataset.book) showChapters(button.dataset.book);
   else if (button.dataset.chapter)
-    goChapter(button.dataset.chapterBook, +button.dataset.chapter);
+    goChapter(button.dataset.chapterBook, +button.dataset.chapter, button.dataset.verse ? +button.dataset.verse : null);
   else if (button.dataset.topic) {
     wisdomBackSnapshot = captureSwipeView(pane);
     wisdomListTop = pane.scrollTop;
@@ -1197,8 +1204,12 @@ if (window.BIBLE?.t) {
   const storedReader = await readStoredReader();
   persistenceReady = true;
   loadPrefs(storedReader || {});
+  // The first visit of each day opens Today, so the day's readings are the first thing seen.
+  if (state.openTodayFirst !== false && window.KATAMEROS && state.lastOpenDay !== localDayKey()) state.tab = "today";
+  state.lastOpenDay = localDayKey();
   selectTab(state.tab);
-  if (state.tab === "bible") renderChapter(state.scroll);
+  if (state.tab === "today") renderToday(localDayKey());
+  else if (state.tab === "bible") renderChapter(state.scroll);
   else if (state.tab === "wisdom") renderWisdom();
   else if (state.tab === "prayers") renderPrayers();
   else if (state.tab === "library") renderLibrary();

@@ -1098,3 +1098,51 @@ progress { width: 100%; accent-color: var(--accent); }
 dialog.note-sheet { margin: auto auto 0; max-height: 65dvh; width: min(100%,640px); border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom,0px); }
 
 #sourceNoteChapter { width: 100%; padding: 10px; font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); margin: 8px 0 18px; }
+
+/* Today: Katameros readings, verse to carry, memorization */
+.today-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.today-nav > div { text-align: center; flex: 1; min-width: 0; }
+.today-nav h1 { margin: 4px 0; font-size: 26px; }
+.coptic-date { margin: 0; color: var(--muted); font-size: 14px; }
+.coptic-date strong { color: var(--accent); font-weight: 600; }
+.today-return { display: block; margin: 4px auto 0; }
+.carry { margin: 22px 0 14px; padding: 18px 18px 14px; border: 1px solid var(--accent); border-radius: 16px; background: var(--surface, var(--bg)); }
+.carry .eyebrow { margin: 0 0 8px; }
+.carry blockquote { margin: 0; font: calc(var(--fs) + 1px)/1.6 var(--reading-font, Georgia, serif); }
+.carry-ref { margin: 8px 0 4px; color: var(--accent); font-weight: 600; font-size: 14px; }
+.carry .actions { margin-top: 10px; }
+.today-stats { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 2px 4px; font-size: 14px; color: var(--muted); }
+.today-stats strong { color: var(--text); font-size: 16px; }
+.today-stats .text-button[disabled] { color: var(--muted); opacity: 1; cursor: default; }
+.complete-badge { color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 6px; }
+.reading-list { display: flex; flex-direction: column; gap: 8px; }
+.reading-card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface, var(--bg)); overflow: hidden; }
+.reading-card summary { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; list-style: none; }
+.reading-card summary::-webkit-details-marker { display: none; }
+.reading-card summary small { display: block; color: var(--muted); font-size: 12px; }
+.reading-card summary strong { display: block; font-weight: 600; }
+.reading-card summary > span:nth-child(2) { flex: 1; min-width: 0; }
+.reading-check { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 13px; color: var(--accent); }
+.reading-card.is-done .reading-check { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.reading-card.is-done summary strong { color: var(--muted); }
+.reading-min { flex: none; color: var(--muted); font-size: 12px; }
+.reading-text { padding: 2px 16px 14px; border-top: 1px solid var(--line); font: var(--fs)/var(--reading-leading, 1.8) var(--reading-font, Georgia, serif); }
+.reading-text p { margin: .6em 0; }
+.reading-text sup { color: var(--accent); font: 600 11px -apple-system, sans-serif; margin-right: 2px; }
+.reading-text .actions { font: 15px -apple-system, BlinkMacSystemFont, sans-serif; }
+.other-hours { margin-top: 18px; }
+.other-hours > summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 8px 0; }
+.today-source { margin-top: 26px; }
+.today-pref { display: flex; align-items: center; gap: 8px; margin: 10px 0 24px; color: var(--muted); font-size: 14px; }
+.practice-text { font: calc(var(--fs) + 2px)/2 var(--reading-font, Georgia, serif); margin: 10px 0 14px; }
+.practice-text .fw { white-space: nowrap; }
+.fade-word { display: inline-block; font: inherit; line-height: 1.25; min-height: 0; height: auto; margin: 0; border: 0; border-bottom: 2px solid var(--accent); background: var(--soft); color: var(--muted); border-radius: 4px; padding: 0 .3em; min-width: 1.6em; cursor: pointer; box-shadow: none; vertical-align: baseline; }
+.fade-word.revealed { color: var(--text); background: none; border-bottom-style: dotted; }
+.pick-verses { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.pick-verse { text-align: left; border: 1px solid var(--line); background: none; border-radius: 10px; padding: 10px 12px; font: 16px/1.55 var(--reading-font, Georgia, serif); color: var(--text); cursor: pointer; }
+.pick-verse[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); }
+.pick-verse sup { color: var(--accent); }
+.memory-list { display: flex; flex-direction: column; gap: 10px; }
+.memory-item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.memory-item p { margin: 6px 0; font-family: var(--reading-font, Georgia, serif); }
+.memory-item small { color: var(--muted); }

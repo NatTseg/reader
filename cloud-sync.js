@@ -72,6 +72,13 @@ function mergeCloudBackups(base, local, remote) {
     const days=mergeSyncMap(indexed(baseline.readingPlan),indexed(local.reader.readingPlan),indexed(remote.reader.readingPlan),conflicts,'Reading plan');
     reader.readingPlan={id:local.reader.readingPlan.id,completed:Object.keys(days).map(Number)};
   } else if (!sameData(remote.reader.readingPlan,baseline.readingPlan) && !sameData(local.reader.readingPlan,remote.reader.readingPlan)) conflicts.push('Reading plan');
+  // Completed readings combine across devices; a memory verse keeps the copy with more reviews.
+  const doneDays=new Set([...Object.keys(local.reader.today?.done||{}),...Object.keys(remote.reader.today?.done||{})]);
+  reader.today={done:Object.fromEntries([...doneDays].map(day=>[day,[...new Set([...(local.reader.today?.done?.[day]||[]),...(remote.reader.today?.done?.[day]||[])])]]))};
+  const memory=new Map();
+  for (const item of [...remote.reader.memory||[],...local.reader.memory||[]]) if (!memory.has(item.id) || (item.reviews||0)>=(memory.get(item.id).reviews||0)) memory.set(item.id,item);
+  const removed=id=>(baseline.memory||[]).some(x=>x.id===id) && (!(local.reader.memory||[]).some(x=>x.id===id) || !(remote.reader.memory||[]).some(x=>x.id===id));
+  reader.memory=[...memory.values()].filter(item=>!removed(item.id));
   const b=base?.personal || null,l=local.personal,r=remote.personal;
   let personal;
   if (sameData(l,r) || sameData(r,b)) personal=l;
