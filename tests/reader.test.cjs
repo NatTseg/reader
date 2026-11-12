@@ -169,6 +169,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v47",
         "reader-v48",
         "reader-v49",
+        "reader-v50",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -189,7 +190,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "reader-v47", "reader-v48", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "reader-v47", "reader-v48", "reader-v49", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1449,9 +1450,10 @@ test('a quick flick commits a back swipe and a thumb-arc swipe opens the drawer'
   assert.equal(run('opened'),1);
 });
 
-test('scripture text has no plural-you carets, ligatures, or missing quote spaces', () => {
+test('scripture text has no ligatures or missing quote spaces, and keeps the plural-you mark', () => {
   const run=reader();
-  const bad=run(`(()=>{let n=0;for(const b in window.BIBLE.t)for(const ch of window.BIBLE.t[b])for(const v of ch)if(v&&/[⌃ﬁﬂ]|[,.;:!?][“‘]/.test(v))n++;return n;})()`);
+  const bad=run(`(()=>{let n=0;for(const b in window.BIBLE.t)for(const ch of window.BIBLE.t[b])for(const v of ch)if(v&&/[ﬁﬂ]|[,.;:!?][“‘]/.test(v))n++;return n;})()`);
   assert.equal(bad,0);
-  assert.ok(!run('verseText("PSA",10,1)').includes('⌃'));
+  assert.ok(run('verseText("PSA",10,1)').includes('⌃'));
+  assert.match(run('scriptureHtml(verseText("PSA",10,1))'),/class="plural-you" title="plural you"/);
 });

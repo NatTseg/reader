@@ -1313,3 +1313,4 @@ dialog.text-sheet { max-height: 80dvh; }
 .carry-foot .carry-ref, .carry-actions .text-button { white-space: nowrap; }
 .drawer-sections button[aria-current] { color: var(--accent); font-weight: 600; background: var(--soft); }
 .wisdom-daily span { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.plural-you { font-size: .55em; vertical-align: .55em; color: var(--muted); margin-left: .5px; cursor: help; }

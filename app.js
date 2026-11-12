@@ -292,13 +292,17 @@ function chapterText(book, ch) {
 function verseText(book, ch, v) {
   return chapterText(book, ch)[sourceVerseStart(book, ch, v)] || "";
 }
-// Clean the bundled text once at load: LXX2012 marks plural "you" with a caret (you⌃), the sources
-// contain printing ligatures (ﬁ, ﬂ), and the WEB sometimes omits the space before an opening quote.
+// Fix formatting errors once at load: printing ligatures (ﬁ, ﬂ) and a missing space before an opening quote.
+// LXX2012's caret after "you" (you⌃) is kept: it marks a plural "you" in the Greek.
 function cleanScriptureText(text) {
-  return typeof text === "string" ? text.replace(/\u2303/g, "").replace(/\ufb01/g, "fi").replace(/\ufb02/g, "fl").replace(/([,.;:!?])([“‘])/g, "$1 $2") : text;
+  return typeof text === "string" ? text.replace(/\ufb01/g, "fi").replace(/\ufb02/g, "fl").replace(/([,.;:!?])([“‘])/g, "$1 $2") : text;
+}
+// Escaped verse text with the plural-you caret shown as a small, labelled mark.
+function scriptureHtml(text) {
+  return esc(text).replace(/\u2303/g, '<span class="plural-you" title="plural you" aria-label="plural">⌃</span>');
 }
 for (const source of [window.BIBLE?.t, window.LEGACY_WEB?.t]) {
-  const needsCleaning = /[\u2303\ufb01\ufb02]|[,.;:!?][“‘]/;
+  const needsCleaning = /[\ufb01\ufb02]|[,.;:!?][“‘]/;
   for (const chapters of Object.values(source || {})) for (const verses of chapters) for (let i = 0; i < verses.length; i++) if (needsCleaning.test(verses[i])) verses[i] = cleanScriptureText(verses[i]);
 }
 function keyOf(book, ch, v) {
@@ -494,7 +498,7 @@ function verseHtml(book, ch, v) {
     color = state.highlights[key],
     bm = bookmarked(book, ch, v),
     note = state.showNotes && noteAt(book, ch, v);
-  return `<div class="verse${color ? " hl-" + color : ""}${bm ? " bookmarked" : ""}" data-key="${key}" data-verse="${v}"><button class="verse-number" data-action="verse" data-key="${key}" aria-label="Actions for ${esc(refLabel(book, ch, v))}${bm ? ", bookmarked" : ""}${color ? ", highlighted" : ""}" title="Save, highlight, or comment">${sourceVerseLabel(book, ch, v)}</button><span>${esc(text)}</span>${note ? `<button class="note-link" data-action="note" data-key="${key}" aria-label="Study note for verse ${v}">Note</button>` : ""}${state.comments[key] ? `<button class="note-link" data-action="verse" data-key="${key}" aria-label="Your comment on verse ${v}">Comment</button>` : ""}</div>`;
+  return `<div class="verse${color ? " hl-" + color : ""}${bm ? " bookmarked" : ""}" data-key="${key}" data-verse="${v}"><button class="verse-number" data-action="verse" data-key="${key}" aria-label="Actions for ${esc(refLabel(book, ch, v))}${bm ? ", bookmarked" : ""}${color ? ", highlighted" : ""}" title="Save, highlight, or comment">${sourceVerseLabel(book, ch, v)}</button><span>${scriptureHtml(text)}</span>${note ? `<button class="note-link" data-action="note" data-key="${key}" aria-label="Study note for verse ${v}">Note</button>` : ""}${state.comments[key] ? `<button class="note-link" data-action="verse" data-key="${key}" aria-label="Your comment on verse ${v}">Comment</button>` : ""}</div>`;
 }
 function rangeHtml(
   book,

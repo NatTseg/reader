@@ -218,7 +218,7 @@ function renderToday(key = todayKey || localDayKey()) {
     const first = passages.find(p => p.openable);
     return `<details class="reading-card${done.has(id) ? " is-done" : ""}"${open ? " open" : ""}><summary><span class="reading-check" aria-hidden="true">${done.has(id) ? "✓" : ""}</span>
       <span><small>${esc(title)}</small><strong>${esc(passageLabel(passages))}</strong></span><span class="reading-min">${minutes} min</span></summary>
-      <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited}, English numbering</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${esc(v.text)}</p>`).join("")}`).join("")}
+      <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited}, English numbering</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${scriptureHtml(v.text)}</p>`).join("")}`).join("")}
       <div class="actions"><button class="${done.has(id) ? "secondary" : "primary"}" data-reading-done="${esc(id)}">${done.has(id) ? "Mark unread" : "Done reading"}</button>
       ${first ? `<button class="text-button" data-today-visit="${first.book}:${first.chapter}:${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.book === "PS2" ? "" : first.chapter} ›</button>` : ""}
       <button class="text-button" data-memorize-reading="${esc(id)}">Memorize a verse…</button></div></div></details>`;
@@ -226,7 +226,7 @@ function renderToday(key = todayKey || localDayKey()) {
   if (main) html += `<h2 class="section-label">Today's Gospel${done.has(main.id) ? ' <span class="complete-badge">✓ Read</span>' : ""}</h2><div class="reading-list main-reading">${readingCard(main.section, main.sub, main.sub.readings[main.index], main.index, !done.has(main.id))}</div>`;
   if (carry) {
     const kept = (state.memory || []).some(item => item.id === memoryId(carry.passages));
-    html += `<section class="carry"><blockquote>${esc(carry.text)}</blockquote><div class="carry-foot"><span class="carry-ref">${esc(carry.label)}</span>
+    html += `<section class="carry"><blockquote>${scriptureHtml(carry.text)}</blockquote><div class="carry-foot"><span class="carry-ref">${esc(carry.label)}</span>
       <span class="carry-actions"><button class="text-button" data-carry-practice="true">Practice</button><button class="text-button" data-carry-memorize="true">${kept ? "✓ Kept" : "Keep"}</button></span></div></section>`;
   }
   // The rest of the day's Liturgy (or, on days without one, the hours) folds away.
@@ -271,7 +271,7 @@ function toggleReadingDone(id) {
 function chooseMemoryVerse(id) {
   const passages = readingById(todayKey, id);
   if (!passages) return;
-  openDialog("Choose a verse to memorize", `<div class="pick-verses">${passages.flatMap((p, pi) => p.verses.map((v, vi) => `<button class="pick-verse" data-pick="${pi}:${vi}" aria-pressed="false"><sup>${esc(v.label)}</sup> ${esc(v.text)}</button>`)).join("")}</div><div class="actions"><button class="primary" id="addPicked" disabled>Add to memory</button></div>`);
+  openDialog("Choose a verse to memorize", `<div class="pick-verses">${passages.flatMap((p, pi) => p.verses.map((v, vi) => `<button class="pick-verse" data-pick="${pi}:${vi}" aria-pressed="false"><sup>${esc(v.label)}</sup> ${scriptureHtml(v.text)}</button>`)).join("")}</div><div class="actions"><button class="primary" id="addPicked" disabled>Add to memory</button></div>`);
   const picked = new Set();
   $("dialogBody").querySelectorAll("[data-pick]").forEach(button => button.onclick = () => {
     if (picked.has(button.dataset.pick)) picked.delete(button.dataset.pick); else picked.add(button.dataset.pick);
