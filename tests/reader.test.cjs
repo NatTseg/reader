@@ -155,6 +155,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v35",
         "reader-v36",
         "reader-v37",
+        "reader-v38",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -175,7 +176,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -332,20 +333,32 @@ test('a random visit preserves annotations and returns to the earlier chapter an
   assert.equal(run('JSON.stringify([state.bookmarks,state.comments])===saved'), true);
 });
 
-test('the Kallistos guide links to the original and the private import, and retains its parent', () => {
+test('How to read Scripture opens the OSB guide when unlocked and the original article otherwise', () => {
   const run=reader();
-  run(`dialog.open=true;$('dialogTitle').textContent='Books & chapters';dialog.scrollTop=90;
-    window.filter={value:'Mark'};$('dialogBody').childNodes=[filter];
-    personalGuides=[{title:'How to Read the Bible',blocks:[{type:'paragraph',text:'Your private copy'}]}];
-    showEssay('kallistos-reading');`);
-  const html=run('$("dialogBody").innerHTML');
-  assert.ok(html.includes('https://www.oca.org/reflections/misc-authors/how-to-read-the-bible'));
-  assert.ok(html.includes('data-context-guide="0"'));
-  assert.ok(run('searchStudyContent("Kallistos","guides")').includes('data-essay="kallistos-reading"'));
-  run('dialogBack()');
-  assert.equal(run('$("dialogTitle").textContent'), 'Books & chapters');
-  assert.equal(run('$("dialogBody").childNodes[0].value'), 'Mark');
-  assert.equal(run('dialog.scrollTop'), 90);
+  run('personalGuides=[];');
+  assert.ok(run('howToReadButton()').includes('https://www.oca.org/reflections/misc-authors/how-to-read-the-bible'));
+  run(`personalGuides=[{title:'Introducing the Orthodox Church',blocks:[]},{title:'How to Read the Bible',blocks:[{type:'paragraph',text:'Your private copy'}]}];`);
+  assert.ok(run('howToReadButton()').includes('data-context-guide="1"'));
+});
+
+test('no AI-written introductions, notes, or guides remain built in', () => {
+  const run=reader();
+  assert.equal(run('Object.keys(window.STUDY.preambles).length+Object.keys(window.STUDY.notes).length+Object.keys(window.STUDY.essays).length'),0);
+  run('loadPrefs({});state.book="GEN";state.chapter=1;personalNotesCount=0;renderChapter(0);');
+  assert.ok(!run('pane.innerHTML').includes('<details class="introduction">'));
+  assert.match(run('pane.innerHTML'),/osb-locked/);
+});
+
+test('OSB section headings and introductions render with the chapter', () => {
+  const run=reader();
+  run(`loadPrefs({});state.book="GEN";state.chapter=1;
+    applyPersonalNotes(validatePersonalNotes({notes:{"MAT:5:3":{body:"Blessed note"}},introductions:{GEN:{title:"The Book of Genesis",blocks:[{type:"heading",text:"Author"},{type:"paragraph",text:"Moses"}]}},
+      headings:{"GEN:1:1":["The Creation"],"GEN:99:1":["Invalid"],"GEN:2:1":[42]}}));renderChapter(0);`);
+  const html=run('pane.innerHTML');
+  assert.match(html,/<h3 class="osb-heading">The Creation<\/h3>/);
+  assert.ok(!html.includes('Invalid'));
+  assert.match(html,/Introduction to Genesis/);
+  assert.match(html,/Moses/);
 });
 
 test('PDF imports reject renamed HTML and oversized files before opening the renderer', async () => {
@@ -1223,4 +1236,38 @@ test('every Katameros reading through 2030 resolves to verse text in this editio
   assert.ok(result.total>1000);
   assert.deepEqual(result.empty,[]);
   assert.ok(result.partial/result.total<0.03, `partial ${result.partial} of ${result.total}`);
+});
+
+test('opening a Today reading is a visit: Go back returns to Today and the Read position is unchanged', () => {
+  const run=reader();
+  run('window.requestAnimationFrame=fn=>fn();loadPrefs({});state.book="JHN";state.chapter=3;openTab("today");state.scroll=.37;renderToday("2026-11-11");');
+  run('handleTodayAction({dataset:{todayVisit:"HEB:4:14"}});');
+  assert.equal(run('state.book+" "+state.chapter'),'HEB 4');
+  assert.equal(run('$("returnReading").hidden'),false);
+  run('returnToPrevious();');
+  assert.equal(run('state.tab'),'today');
+  assert.equal(run('state.book+" "+state.chapter'),'JHN 3');
+  assert.equal(run('state.scroll'),.37);
+});
+
+test('browsing other books in the chapter drawer does not move the reading position', () => {
+  const run=reader();
+  run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};dialog.querySelector=()=>null;for(const id of ["drawerNextBook","drawerPreviousBook","closeDialog"])$(id).focus=()=>{};loadPrefs({});state.book="JHN";state.chapter=3;showChapterDrawer();$("drawerNextBook").onclick();');
+  assert.equal(run('state.book+" "+state.chapter'),'JHN 3');
+  assert.equal(run('$("dialogTitle").textContent'),displayNameOf('ACT'));
+  function displayNameOf(id){return run(`displayName("${id}")`);}
+});
+
+test('a committed back swipe completes when a new touch lands during the settle', () => {
+  const run=reader();
+  run(`window.committed=0;window.view=beginBackSlide({getBoundingClientRect:()=>({left:0,top:0,width:390,height:800}),classList:{add(){},remove(){}},style:{setProperty(){},removeProperty(){}}},null,true);
+    view.finish(true,()=>committed++);activeBackSlide.flush();`);
+  assert.equal(run('committed'),1);
+  assert.equal(run('activeBackSlide'),null);
+});
+
+test('restoring a backup taken on Today shows Today', () => {
+  const run=reader();
+  run('loadPrefs({});window.rendered=null;renderToday=key=>{window.rendered=key;};renderTab("today");');
+  assert.equal(run('rendered'),run('localDayKey()'));
 });

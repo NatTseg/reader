@@ -1,4 +1,4 @@
-const CACHE = "reader-v37";
+const CACHE = "reader-v38";
 const ASSETS = [
   "./",
   "./index.html",
@@ -10,6 +10,8 @@ const ASSETS = [
   "./cloud-sync.js",
   "./reader-tools.js",
   "./today.js",
+  "./osb-pack.js",
+  "./osb-data.enc.json",
   "./katameros-data.js",
   "./library.js", "./library-formats.js", "./library-tools.js", "./library-backup.js", "./vendor/fflate/fflate.js", "./vendor/fflate/LICENSE",
   "./note-alignment.js",

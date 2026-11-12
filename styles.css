@@ -1146,3 +1146,25 @@ dialog.note-sheet { margin: auto auto 0; max-height: 65dvh; width: min(100%,640p
 .memory-item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .memory-item p { margin: 6px 0; font-family: var(--reading-font, Georgia, serif); }
 .memory-item small { color: var(--muted); }
+
+/* Orthodox Study Bible: introduction, section headings, unlock */
+.osb-intro summary small { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 12px; }
+.osb-intro-body { font-family: var(--reading-font, Georgia, serif); }
+.osb-intro-body h3 { font-size: 15px; margin: 18px 0 6px; color: var(--accent); }
+.osb-intro-body p { margin: 0 0 .7em; line-height: 1.6; }
+.osb-heading { font: 600 calc(var(--fs) * .8)/1.35 var(--reading-font, Georgia, serif); color: var(--accent); margin: 1.6em 0 .5em; letter-spacing: .01em; }
+.verses > .osb-heading:first-child { margin-top: .4em; }
+.osb-locked { margin: 4px 0 14px; }
+.osb-locked .text-button { padding: 0; font-size: inherit; }
+.osb-unlock { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.osb-unlock input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font-size: 16px; }
+.import-file summary { cursor: pointer; margin: 8px 0; }
+.note-body { font: calc(var(--fs) - 2px)/1.6 var(--reading-font, Georgia, serif); white-space: pre-line; }
+
+/* Review fixes */
+#exitFocus { background: var(--bg); border-color: var(--line); color: var(--text); }
+body:has(#returnReading:not([hidden])) #toast { bottom: calc(150px + var(--safe)); }
+.continue-reading { display: flex; align-items: baseline; gap: 10px; width: 100%; margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, var(--bg)); color: var(--text); text-align: left; cursor: pointer; }
+.continue-reading small { color: var(--muted); font-size: 12px; }
+.continue-reading strong { flex: 1; font-weight: 600; }
+.continue-reading span { color: var(--accent); font-size: 13px; }

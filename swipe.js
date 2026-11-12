@@ -66,7 +66,7 @@ function beginBackSlide(surface, parentSnapshot, dismissDialog) {
     previous = mountSwipeView(parentSnapshot, overlay, 'swipe-previous');
     moving = mountSwipeView(currentSnapshot, overlay, 'swipe-current');
   }
-  let timer, disposed = false;
+  let timer, disposed = false, pending = null;
   const cleanup = () => {
     if (disposed) return;
     disposed = true;
@@ -90,7 +90,14 @@ function beginBackSlide(surface, parentSnapshot, dismissDialog) {
     width,
     update,
     cancel: cleanup,
+    // A new touch during the settle completes a committed swipe at once instead of discarding it.
+    flush() {
+      const action = pending;
+      cleanup();
+      action?.();
+    },
     finish(commit, onCommit) {
+      pending = commit ? onCommit : null;
       if (dismissDialog) surface.classList.add('swipe-settling');
       const duration = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 200;
       moving.style.transition = `transform ${duration}ms cubic-bezier(.2,.7,.2,1)`;
@@ -100,6 +107,7 @@ function beginBackSlide(surface, parentSnapshot, dismissDialog) {
       update(commit ? width : 0);
       timer = setTimeout(() => {
         if (disposed) return;
+        pending = null;
         cleanup();
         if (commit) onCommit();
       }, duration);
@@ -129,11 +137,18 @@ function bindChapterSwipe(surface, drawer) {
     if (!animate) cancelBackSlide();
   };
   surface.addEventListener('touchstart', (event) => {
-    if (activeBackSlide) { cancel(); cancelBackSlide(); return; }
+    if (activeBackSlide) {
+      if (!start && activeBackSlide.flush) activeBackSlide.flush(); else { cancel(); cancelBackSlide(); }
+      return;
+    }
     start = null; axis = null; distance = 0; peak = 0; view = null;
     onBack = backAction();
     if (event.touches.length !== 1 || (drawer ? !dialog.open : dialog.open || (state.tab !== 'bible' && !onBack))) return;
-    if (event.target.closest('button, input, textarea, select, label, a, summary, [contenteditable]')) return;
+    // Books keep horizontal drags for reading; pinch-zoomed pages pan instead of navigating.
+    if (drawer && dialog.classList?.contains('library-reader')) return;
+    if ((window.visualViewport?.scale || 1) > 1.01) return;
+    // Drags may start on list buttons (the click is suppressed afterwards), but not inside form fields.
+    if (event.target.closest('input, textarea, select, [contenteditable]')) return;
     start = {x: event.touches[0].clientX, y: event.touches[0].clientY};
   }, {passive: true});
   surface.addEventListener('touchmove', (event) => {
@@ -157,6 +172,8 @@ function bindChapterSwipe(surface, drawer) {
     const touch = event.changedTouches[0];
     const dx = touch ? touch.clientX - start.x : 0, dy = touch ? touch.clientY - start.y : 0;
     start = null;
+    // A drag that ended with text selected was a selection, not a gesture.
+    if (String(window.getSelection?.() || '').trim()) { if (view) { view.finish(false, () => {}); view = null; } return; }
     if (view) {
       distance = Math.max(0, dx); peak = Math.max(peak, distance);
       const commit = swipeDirection(dx, dy) === 1 && shouldCommitBack(distance, peak, view.width);
@@ -164,7 +181,7 @@ function bindChapterSwipe(surface, drawer) {
       view.update(distance);
       view.finish(commit, onBack);
       view = null;
-    } else if (!drawer && swipeDirection(dx, dy) === -1 && state.tab === 'bible') {
+    } else if (!drawer && swipeDirection(dx, dy) === -1 && Math.abs(dx) > Math.abs(dy) * 2.2 && state.tab === 'bible') {
       suppressClickUntil = Date.now() + 400;
       showChapterDrawer();
     }

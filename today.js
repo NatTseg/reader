@@ -178,6 +178,7 @@ function renderToday(key = todayKey || localDayKey()) {
     pane.innerHTML = html; return;
   }
   const carry = verseToCarry(day);
+  if (key === today && state.book && bookMeta(state.book)) html += `<button class="continue-reading" data-tab-open="bible"><small>Continue reading</small><strong>${esc(refLabel(state.book, state.chapter))}</strong><span>${Math.round((state.scroll || 0) * 100)}% ›</span></button>`;
   if (carry) html += `<section class="carry"><p class="eyebrow">Verse to carry today</p><blockquote>${esc(carry.text)}</blockquote>
     <p class="carry-ref">${esc(carry.label)}</p><div class="actions"><button class="primary" data-carry-practice="true">Practice</button>
     <button class="secondary" data-carry-memorize="true">${(state.memory || []).some(item => item.id === memoryId(carry.passages)) ? "✓ In memory" : "Add to memory"}</button></div>
@@ -194,7 +195,7 @@ function renderToday(key = todayKey || localDayKey()) {
       <span><small>${esc(title)}</small><strong>${esc(passageLabel(passages))}</strong></span><span class="reading-min">${minutes} min</span></summary>
       <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited} in English numbering (World English Bible).</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${esc(v.text)}</p>`).join("")}`).join("")}
       <div class="actions"><button class="${done.has(id) ? "secondary" : "primary"}" data-reading-done="${esc(id)}">${done.has(id) ? "Mark unread" : "Done reading"}</button>
-      ${first ? `<button class="text-button" data-chapter-book="${first.book}" data-chapter="${first.chapter}" data-verse="${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.book === "PS2" ? "" : first.chapter} ›</button>` : ""}
+      ${first ? `<button class="text-button" data-today-visit="${first.book}:${first.chapter}:${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.book === "PS2" ? "" : first.chapter} ›</button>` : ""}
       <button class="text-button" data-memorize-reading="${esc(id)}">Memorize a verse…</button></div></div></details>`;
   };
   const liturgy = liturgyReadings(day);
@@ -216,6 +217,7 @@ function readingById(key, id) {
 }
 function toggleReadingDone(id) {
   state.today ||= {done: {}};
+  const wasCompleteBefore = dayComplete(todayKey);
   const list = new Set(dayDone(todayKey));
   if (list.has(id)) list.delete(id); else list.add(id);
   state.today.done[todayKey] = [...list];
@@ -226,7 +228,7 @@ function toggleReadingDone(id) {
   persist();
   const top = pane.scrollTop; renderToday(todayKey); pane.scrollTop = top;
   pane.querySelector(`[data-reading-done="${CSS.escape(id)}"]`)?.closest("details")?.removeAttribute("open");
-  if (list.has(id) && wasComplete) notify("Today's Liturgy readings are complete");
+  if (list.has(id) && wasComplete && !wasCompleteBefore) notify("Today's Liturgy readings are complete");
 }
 function chooseMemoryVerse(id) {
   const passages = readingById(todayKey, id);
@@ -300,6 +302,10 @@ function handleTodayAction(button) {
   if (data.todayShift !== undefined) {
     const shift = Number(data.todayShift);
     renderToday(shift === 0 ? localDayKey() : shiftDayKey(todayKey || localDayKey(), shift)); pane.scrollTop = 0;
+  } else if (data.todayVisit) {
+    // A visit, so "Go back" returns to Today and the Read position is left alone.
+    const [book, ch, v] = data.todayVisit.split(":");
+    visitPassage(book, Number(ch), Number(v));
   } else if (data.readingDone) toggleReadingDone(data.readingDone);
   else if (data.memorizeReading) chooseMemoryVerse(data.memorizeReading);
   else if (data.carryPractice || data.carryMemorize) {
@@ -307,7 +313,8 @@ function handleTodayAction(button) {
     if (!carry) return true;
     if (data.carryPractice) showPractice(carry.label, carry.text);
     else { const added = addMemoryVerse(carry.passages); persist(); notify(added ? "Added to your memory verses" : "Already in your memory verses"); renderToday(todayKey); }
-  } else if (data.memoryReview) { if (memoryDue().length) showMemoryReview(); else showMemoryList(); }
+  } else if (data.tabOpen) openTab(data.tabOpen);
+  else if (data.memoryReview) { if (memoryDue().length) showMemoryReview(); else showMemoryList(); }
   else return false;
   return true;
 }

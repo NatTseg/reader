@@ -11,6 +11,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="reader" />
+    <script>
+      try { const saved = JSON.parse(localStorage.getItem("obible3") || "{}"); if (saved.theme === "dark") document.documentElement.dataset.theme = "dark"; if (saved.paper) document.documentElement.dataset.paper = saved.paper; } catch {}
+    </script>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg?v=35" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png?v=35" />
@@ -27,6 +30,7 @@
     <script src="cloud-config.js" defer></script>
     <script src="cloud-sync.js" defer></script>
     <script src="note-alignment.js" defer></script>
+    <script src="osb-pack.js" defer></script>
     <script src="reader-tools.js" defer></script>
     <script src="katameros-data.js" defer></script>
     <script src="today.js" defer></script>

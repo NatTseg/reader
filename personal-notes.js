@@ -2,7 +2,7 @@
 const builtInStudy = {notes: window.STUDY.notes, preambles: {...window.STUDY.preambles}};
 let personalNotesCount = 0;
 let personalNotesRevision = 0;
-let personalGuides = [], personalIntroductions = {};
+let personalGuides = [], personalIntroductions = {}, personalHeadings = {};
 let personalAlignment = null;
 function validatePersonalNotes(data) {
   if (!data || typeof data.notes !== "object" || !data.notes || Array.isArray(data.notes))
@@ -39,7 +39,15 @@ function validatePersonalNotes(data) {
       sourceVerse:typeof note.sourceVerse === "string" ? note.sourceVerse : "", see:Array.isArray(note.see) ? note.see.filter(k => typeof k === "string" && /^[A-Z0-9]{3}:\d+:\d+$/.test(k)) : []};
   }
   const alignment = typeof validateNoteAlignment === "function" ? validateNoteAlignment(data.alignment,sourceNotes) : null;
-  return { notes, preambles, guides, introductions, sourceNotes, alignment };
+  // OSB section headings, keyed by the verse they precede in this edition.
+  const headings = {};
+  for (const [key, list] of Object.entries(data.headings || {})) {
+    const m = key.match(/^([A-Z0-9]{3}):(\d+):(\d+)$/);
+    if (!m || !Array.isArray(list) || !validVerse(m[1], +m[2], +m[3])) continue;
+    const texts = list.filter(text => typeof text === "string" && text.trim() && text.length <= 200).slice(0, 4);
+    if (texts.length) headings[key] = texts;
+  }
+  return { notes, preambles, guides, introductions, sourceNotes, alignment, headings };
 }
 function personalNotesStore(mode, value) {
   return new Promise((resolve, reject) => {
@@ -65,6 +73,7 @@ function applyPersonalNotes(data) {
   if (typeof applyNoteAlignment === "function") applyNoteAlignment(imported ? data : null);
   personalGuides = data.guides || [];
   personalIntroductions = data.introductions || {};
+  personalHeadings = data.headings || {};
   const top = pane.scrollTop;
   if (state.tab === "bible") renderChapter(state.scroll);
   else if (state.tab === "wisdom") renderWisdom();
@@ -75,7 +84,14 @@ async function restorePersonalNotes() {
   const revision = personalNotesRevision;
   try {
     const data = await personalNotesStore("readonly");
-    if (data && revision === personalNotesRevision) applyPersonalNotes(validatePersonalNotes(data));
+    let fresh = null;
+    // A file imported by hand (no packId) takes precedence over the encrypted copy.
+    if (typeof loadOsbPack === "function" && (!data || data.packId)) {
+      try { fresh = await loadOsbPack(data); } catch { /* keep the stored copy when the pack cannot be opened */ }
+    }
+    if (revision !== personalNotesRevision) return;
+    if (fresh) applyPersonalNotes(fresh);
+    else if (data) applyPersonalNotes(validatePersonalNotes(data));
   } catch {
     // Built-in notes remain usable when IndexedDB is unavailable.
   }
@@ -126,7 +142,7 @@ function personalContextStatus() {
   const linked = Object.keys(personalAlignment?.notes || {}).length;
   const source = Object.keys(personalSourceNotes).length;
   return personalNotesCount ? `${personalNotesCount.toLocaleString()} earlier notes, ${Object.keys(personalIntroductions).length} book introductions, and ${personalGuides.length} guides stored on this device.${source ? ` ${linked.toLocaleString()} of ${source.toLocaleString()} source notes have verse links; all remain available in the notes browser.` : ''}`
-    : "Import your OSB study file for offline notes, book introductions, and reading guides.";
+    : "Your Orthodox Study Bible notes are not open on this device yet.";
 }
 function showContextLibrary(settingsSnapshot) {
   const parentView = settingsSnapshot || captureSwipeView(dialog);

@@ -110,11 +110,7 @@ function renderRestoredReader(reader, personal) {
   $("returnReading").hidden = true;
   applyPersonalNotes(personal);
   applyAppearance(); selectTab(state.tab);
-  if (state.tab === "bible") renderChapter(state.scroll);
-  else if (state.tab === "wisdom") renderWisdom();
-  else if (state.tab === "prayers") renderPrayers();
-  else if (state.tab === "library") renderLibrary();
-  else renderSaved();
+  renderTab(state.tab);
 }
 async function restoreBackup(data) {
   if (persistenceBusy) throw new Error("Wait for the current save to finish.");

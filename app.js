@@ -404,6 +404,15 @@ function selectTab(tab) {
     else b.removeAttribute("aria-current");
   });
 }
+// The single place that draws a tab's main view.
+function renderTab(tab = state.tab) {
+  if (tab === "today" && typeof renderToday === "function") renderToday(localDayKey());
+  else if (tab === "bible") renderChapter(state.scroll);
+  else if (tab === "wisdom") renderWisdom();
+  else if (tab === "prayers") renderPrayers();
+  else if (tab === "library") renderLibrary();
+  else renderSaved();
+}
 function openTab(tab) {
   if (typeof setFocusReading === "function") setFocusReading(false);
   cancelBackSlide();
@@ -417,12 +426,7 @@ function openTab(tab) {
   returnPlace = null;
   $("returnReading").hidden = true;
   selectTab(tab);
-  if (tab === "today") renderToday(localDayKey());
-  else if (tab === "bible") renderChapter(state.scroll);
-  else if (tab === "wisdom") renderWisdom();
-  else if (tab === "prayers") renderPrayers();
-  else if (tab === "library") renderLibrary();
-  else renderSaved();
+  renderTab(tab);
   persist();
 }
 function goChapter(book, ch, verse = null) {
@@ -482,7 +486,11 @@ function rangeHtml(
   const seen = new Set();
   for (let v = start; v <= Math.min(end, chapterText(book, ch).length - 1); v++) {
     const first = sourceVerseStart(book, ch, v);
-    if (!seen.has(first)) html += verseHtml(book, ch, first);
+    if (!seen.has(first)) {
+      const headings = personalHeadings[keyOf(book, ch, first)];
+      if (headings) html += headings.map(text => `<h3 class="osb-heading">${esc(text)}</h3>`).join("");
+      html += verseHtml(book, ch, first);
+    }
     seen.add(first);
   }
   return html;
@@ -515,13 +523,11 @@ function renderChapter(scroll = 0) {
   $("reference").textContent = refLabel(state.book, state.chapter);
   $("previous").disabled = !adjacent(-1);
   $("next").disabled = !adjacent(1);
-  const p = window.STUDY?.preambles?.[state.book];
-  const intro =
-    personalIntroductions[state.book] && state.showPreamble
-      ? `<div class="introduction"><button class="text-button" data-context-intro="${state.book}">Read the OSB introduction to ${esc(displayName(state.book))} ›</button></div>`
-      : p && state.showPreamble
-      ? `<details class="introduction"><summary>About ${esc(displayName(state.book))}</summary><p>${esc(p.body)}</p><p><strong>Author.</strong> ${esc(p.author)}<br><strong>Setting.</strong> ${esc(p.date)}<br><strong>Theme.</strong> ${esc(p.theme)}</p><p>${esc(p.outline)}</p></details>`
-      : "";
+  const osbIntro = personalIntroductions[state.book];
+  const intro = !state.showPreamble ? ""
+    : osbIntro ? `<details class="introduction osb-intro"><summary>Introduction to ${esc(displayName(state.book))} <small>Orthodox Study Bible</small></summary><div class="osb-intro-body">${studyArticleHtml(osbIntro)}</div></details>`
+    : !personalNotesCount && state.chapter === 1 ? `<p class="helper osb-locked">The Orthodox Study Bible introduction and footnotes open with your private link or passphrase in <button class="text-button" data-open-settings="true">Reading settings</button>.</p>`
+    : "";
   pane.innerHTML = `<div class="content"><p class="eyebrow">${esc(displayName(state.book))}</p><div class="chapter-heading"><h1>${state.book === "PS2" ? "Psalm 151" : "Chapter " + state.chapter}</h1><span>Tap a verse number to save</span></div><p class="translation-label">${isSeptuagint(state.book) ? "Septuagint · LXX2012" : "World English Bible · New Testament"}</p>${intro}<article class="verses">${rangeHtml(state.book, state.chapter)}</article><div class="chapter-end"><button class="secondary" data-direction="-1" ${!adjacent(-1) ? "disabled" : ""}>Previous</button><button class="secondary" data-direction="1" ${!adjacent(1) ? "disabled" : ""}>Next chapter</button></div>${notesHtml()}</div>`;
   pane.scrollTop = scroll * (pane.scrollHeight - pane.clientHeight);
 }
@@ -660,7 +666,7 @@ function captureDialogReturn() {
 function showBooks() {
   openDialog(
     "Books & chapters",
-    '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button><button class="text-button" data-essay="kallistos-reading">How to read Scripture ›</button></div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
+    '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button>${howToReadButton()}</div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
   );
   const render = () => {
     const query = $("bookFilter").value.trim().toLowerCase();
@@ -693,19 +699,18 @@ function chapterListHtml(book) {
     return `<button data-chapter="${i + 1}" data-chapter-book="${book}" ${current ? 'aria-current="true"' : ""}><span>Chapter ${i + 1}</span>${current ? '<small>Reading</small>' : icon("right")}</button>`;
   }).join("")}</div>`;
 }
-function showChapterDrawer() {
-  const book = state.book;
+function showChapterDrawer(book = state.book) {
   const previous = neighboringBook(book, -1),
     next = neighboringBook(book, 1);
   openDialog(
     displayName(book),
-    `<p class="helper drawer-position">Chapter ${state.chapter} of ${bookMeta(book).n}</p><div class="drawer-books"><button class="secondary" id="drawerPreviousBook" ${previous ? "" : "disabled"}><span>‹ Previous book</span><small>${previous ? esc(displayName(previous)) : "First book"}</small></button><button class="secondary" id="drawerNextBook" ${next ? "" : "disabled"}><span>Next book ›</span><small>${next ? esc(displayName(next)) : "Last book"}</small></button></div><h3 class="section-label">Chapters</h3>${chapterListHtml(book)}<button class="text-button" id="drawerAllBooks">Browse all books ›</button>`,
+    `<p class="helper drawer-position">${book === state.book ? `Chapter ${state.chapter} of ${bookMeta(book).n}` : `${bookMeta(book).n} chapters`}</p><div class="drawer-books"><button class="secondary" id="drawerPreviousBook" ${previous ? "" : "disabled"}><span>‹ Previous book</span><small>${previous ? esc(displayName(previous)) : "First book"}</small></button><button class="secondary" id="drawerNextBook" ${next ? "" : "disabled"}><span>Next book ›</span><small>${next ? esc(displayName(next)) : "Last book"}</small></button></div><h3 class="section-label">Chapters</h3>${chapterListHtml(book)}<button class="text-button" id="drawerAllBooks">Browse all books ›</button>`,
   );
   dialog.classList.add("chapter-drawer");
+  // Browsing other books only changes the drawer; the reading position moves when a chapter is chosen.
   const changeBook = (id, focusId) => {
     if (!id) return;
-    goChapter(id, 1);
-    showChapterDrawer();
+    showChapterDrawer(id);
     const button = $(focusId);
     (button.disabled ? $("closeDialog") : button).focus({
       preventScroll: true,
@@ -895,6 +900,18 @@ function showVerse(book, ch, v) {
             .forEach((b) => b.setAttribute("aria-pressed", b === btn));
         }),
     );
+  // Comments save as you type, so closing the sheet never loses a draft.
+  let draftTimer;
+  $("comment").oninput = () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      const text = $("comment")?.value.trim();
+      if (text === undefined) return;
+      if (text) state.comments[key] = text; else delete state.comments[key];
+      persist(); refreshAnnotations();
+      if ($("deleteComment")) $("deleteComment").disabled = !text;
+    }, 350);
+  };
   $("saveComment").onclick = () => {
     const text = $("comment").value.trim();
     if (text) state.comments[key] = text;
@@ -931,6 +948,7 @@ function visitPassage(book, ch, v) {
     ch: state.chapter,
     top: pane.scrollTop,
     tab: state.tab,
+    readScroll: state.tab === "bible" ? null : state.scroll,
     previous: returnPlace,
     snapshot: captureSwipeView(pane),
   };
@@ -971,10 +989,11 @@ function showSettings() {
       )
       .join(
         "",
-      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Personal study notes</h3><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"><p class="helper">Choose your study-notes JSON file. It stays on this device.</p><h3 class="section-label">Reading guides</h3><button class="text-button" data-essay="kallistos-reading">Kallistos Ware: how to read Scripture ›</button><br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><br><button class="text-button" data-essay="how-to-read">How to read the Bible ›</button><br><button class="text-button" data-essay="typology">How Scripture speaks of Christ ›</button><p class="helper">Old Testament: LXX2012, Brenton’s Greek Septuagint translation with language updates. New Testament: World English Bible. Psalm numbers follow the Septuagint; source verse ranges and gaps are preserved. Imported OSB notes retain their original references, which have not all been aligned to LXX2012. Both Bible translations are public domain. <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012 source</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">WEB source</a>. Bookmarks, highlights, and comments are saved in this browser.</p>`,
+      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${osbSettingsHtml()}<details class="import-file"><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Old Testament: LXX2012, Brenton’s Greek Septuagint translation with language updates. New Testament: World English Bible. Psalm numbers follow the Septuagint; source verse ranges and gaps are preserved. Orthodox Study Bible notes are placed at the matching LXX2012 verse; a few whose verse could not be matched stay in the chapter's note list. Both Bible translations are public domain. <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012 source</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">WEB source</a>. Bookmarks, highlights, and comments are saved in this browser.</p>`,
   );
   bindReaderToolsSettings();
   $("personalNotesFile").onchange = importPersonalNotes;
+  if (typeof wireOsbSettings === "function") wireOsbSettings();
   $("openStorage").onclick = showStorage;
   $("openCloudSync").hidden = !cloudConfig();
   $("openCloudSync").onclick = showCloudSync;
@@ -982,6 +1001,8 @@ function showSettings() {
     rememberScroll();
     state.font = Math.max(16, Math.min(28, state.font + delta));
     applyAppearance();
+    // WebKit has no scroll anchoring: keep the same place in the chapter after the text reflows.
+    if (state.tab === "bible") pane.scrollTop = state.scroll * (pane.scrollHeight - pane.clientHeight);
     $("fontValue").textContent = state.font;
     persist();
   };
@@ -1013,6 +1034,12 @@ function showSettings() {
         }),
     );
 }
+// Metropolitan Kallistos's "How to Read the Bible" is one of the OSB guides; without the OSB, link to the original.
+function howToReadButton() {
+  const index = personalGuides.findIndex(g => /how to read the bible/i.test(g.title));
+  return index >= 0 ? `<button class="text-button" data-context-guide="${index}">How to read Scripture · Kallistos Ware ›</button>`
+    : `<a class="text-button" href="https://www.oca.org/reflections/misc-authors/how-to-read-the-bible" target="_blank" rel="noopener noreferrer">How to read Scripture · Kallistos Ware ↗</a>`;
+}
 function showEssay(id) {
   const e = window.STUDY?.essays?.[id];
   if (!e) return;
@@ -1035,6 +1062,7 @@ function handleAction(event) {
   if (handleReaderToolAction(button)) return;
   if (typeof handleTodayAction === "function" && handleTodayAction(button)) return;
   if (button.dataset.contextLibrary) { showContextLibrary(); return; }
+  if (button.dataset.openSettings) { showSettings(); return; }
   if (button.dataset.contextGuide !== undefined) { showStudyContext("guide", button.dataset.contextGuide, button.dataset.contextParent); return; }
   if (button.dataset.contextIntro) { showStudyContext("intro", button.dataset.contextIntro, button.dataset.contextParent); return; }
   if (button.dataset.legacyKey) { showLegacySaved(button.dataset.legacyKey); return; }
@@ -1125,21 +1153,15 @@ function returnToPrevious() {
   if (!r) return;
   returnPlace = r.previous || null;
   $("returnReading").hidden = !returnPlace;
-  if (r.tab === "wisdom") {
-    selectTab("wisdom");
-    renderWisdom();
-  } else if (r.tab === "saved") {
-    selectTab("saved");
-    renderSaved();
-  } else if (r.tab === "prayers") {
-    selectTab("prayers");
-    renderPrayers();
-  } else if (r.tab === "library") {
-    selectTab("library");
-    renderLibrary();
+  // A visit from another tab borrowed the reader; put the Read position back exactly as it was.
+  state.book = r.book;
+  state.chapter = r.ch;
+  if (r.tab !== "bible") {
+    if (r.readScroll !== null && r.readScroll !== undefined) state.scroll = r.readScroll;
+    selectTab(r.tab);
+    if (r.tab === "today" && typeof renderToday === "function") renderToday(todayKey || localDayKey());
+    else renderTab(r.tab);
   } else {
-    state.book = r.book;
-    state.chapter = r.ch;
     selectTab("bible");
     renderChapter();
   }
@@ -1208,17 +1230,24 @@ if (window.BIBLE?.t) {
   if (state.openTodayFirst !== false && window.KATAMEROS && state.lastOpenDay !== localDayKey()) state.tab = "today";
   state.lastOpenDay = localDayKey();
   selectTab(state.tab);
-  if (state.tab === "today") renderToday(localDayKey());
-  else if (state.tab === "bible") renderChapter(state.scroll);
-  else if (state.tab === "wisdom") renderWisdom();
-  else if (state.tab === "prayers") renderPrayers();
-  else if (state.tab === "library") renderLibrary();
-  else renderSaved();
+  renderTab(state.tab);
   await restorePersonalNotes();
   await restoreLibrary();
   setupLibraryReader();
   document.querySelector(".app").inert = false;
   initializeCloudSync();
+  // Home Screen apps usually resume rather than relaunch: a new day still opens Today.
+  const resumeDay = () => {
+    if (document.hidden || typeof localDayKey !== "function") return;
+    const today = localDayKey();
+    if (state.lastOpenDay === today) return;
+    state.lastOpenDay = today;
+    if (state.openTodayFirst !== false && window.KATAMEROS && !dialog.open && !returnPlace) openTab("today");
+    else if (state.tab === "today") renderToday(today);
+    persist();
+  };
+  document.addEventListener("visibilitychange", resumeDay);
+  window.addEventListener("pageshow", resumeDay);
   if ("serviceWorker" in navigator)
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   })().catch(() => { document.querySelector(".app").inert = false; notify("Could not restore saved data. Please reload before making changes."); });
