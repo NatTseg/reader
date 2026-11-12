@@ -1,57 +1,74 @@
-# reader
+# Reader · OSB text edition
 
-Live: https://nattseg.github.io/reader/
+The same offline Reader, reading the owner's Orthodox Study Bible: the St. Athanasius Academy Septuagint
+Old Testament and the New King James Version New Testament, in the OSB's own book order, names, chapter and
+verse numbering, with its section headings, study notes, translators' notes, book introductions, guides, and
+study articles.
 
-A simple, offline Scripture reader. LXX2012 Septuagint Old Testament with the World English Bible New Testament, original study notes, bookmarks, highlights, comments, and passages for everyday life.
+The Bible text and all study material are copyrighted. They are never committed or published in readable form.
+The site serves two encrypted packs (`bible.enc`, `study.enc`: gzip, then AES-256-GCM; the key derives from a
+passphrase with PBKDF2-SHA256, 600,000 rounds). A private link (`#osb=<key>`) opens them on a device; the key
+stays in the address bar so an iPhone Home Screen app keeps it, and is also remembered in that browser.
+Without a key the app shows only a lock screen.
 
-- **Tabs:** Today, Read, Wisdom, Prayers. Prayers has the Agpeya (each hour's Psalms, Gospel, and the opening and closing prayers; the current hour is marked) and the prayer book. Library (saved verses, memory verses, books, OSB guides) opens from the header, next to Aa and search.
-- **Today:** the day's Gospel from the Coptic Orthodox Katameros, open and ready to read, with the Coptic date, the season or fast (Nativity Fast, Great Fast, Holy Week, Holy Fifty Days, Apostles' Fast, St. Mary's Fast), any feast, and who the Church remembers that day (Synaxarium titles). The Liturgy Psalm is the verse to carry (Practice, Keep); the rest of the Liturgy readings fold under "More from today's Liturgy". Reading the Gospel completes the day. References come from the open-source Katameros project (MIT), precomputed through 2030 in `katameros-data.js` (`scripts/fetch_katameros.mjs`, `scripts/extract_synaxarium.py`, then `scripts/build_katameros.mjs`); text is this app's LXX2012/WEB. Verified against St. Bishoy Coptic Orthodox Church's Katameros for 2, 3, and 22 Hatour and the first Sunday of Hatour.
-- **Quick text (Aa):** a small sheet for size, font, spacing, and theme (Light, Sepia, Gray, Dark); changes apply live and keep your place.
-- **Verse menu:** one row for save, three highlight colours (tap again to clear), copy, memorize, and comment (saves as you type).
-- **Reading plan on Today:** the next plan day's chapters appear on Today; a chapter ticks off when you reach its end, and the day completes itself.
-- **Read:** choose any book and chapter from a chapter grid (swipe left or tap the chapters button for the drawer, with OSB section headings to jump within the chapter); tap a verse number to save or annotate it.
-- **Random passage:** Books & chapters → Random passage opens a randomly selected source verse in its chapter. Go back or drag right to return to the earlier reading position. All books in the app participate; missing verse numbers are skipped.
-- **Library:** PDF and EPUB books, plus guides, have their own footer tab. Add book imports private files under 50 MB; Continue reading resumes the most recently opened book at its saved page/section and scroll position. The Spiritual Man links to the church-hosted source; save that PDF to Files and import it on the book page. Original books and their notes stay in the separate `reader-library` IndexedDB database.
-- **Book reading tools:** PDF Text view infers paragraphs and headings from source layout; Page view preserves the original page and its proportions, with bounded raster memory on phones. PDF page failures retain the last readable page and offer retry; readable text is used if drawing fails. Stalled PDF work has a timeout, and Contents/Search remain available during a slow page load. Mode changes retain the current scroll position and pending page. Contents uses PDF outlines or EPUB 2/3 navigation. Search book finds selectable text, highlights the first match, and opens its page/section; image-only pages cannot be searched. Save / notes bookmarks your current place and optionally stores selected text and a reflection, with editing and removal. EPUB chapters use the reading font, size, and spacing. Reflowable EPUBs without DRM are supported; fixed-layout books should use their PDF edition. Imported scripts, embedded frames, publisher styling, and remote assets are not run or loaded.
-- **Complete library backup:** Library → Backup & restore → Back up Reader downloads one ZIP with the original books, their saved passages/reflections, reading places, and the complete Bible/OSB JSON backup. Restore checks file hashes, parses each book, and previews the replacement before committing; Undo the last complete restore recovers the previous library and Bible. Archives support up to 200 MB of book files. Save original to Files exports an individual book without its Reader annotations. Existing Bible JSON backups and optional cloud sync remain separate and exclude library files.
-- **Kallistos Ware:** How to read Scripture is available from Library, Books & chapters, and Reading settings. An original short summary is bundled offline, with a link to the full OCA article. When the owner’s OSB import includes How to Read the Bible, the guide also links directly to that private full-text copy offline.
-- **Search:** enter a reference such as John 3:16 or a phrase such as “love one another.”
-- **Wisdom:** 57 topics in seven groups (troubles of the heart, daily life, relationships, prayer and the spiritual life, virtues, seasons of life, Christ and the faith), 456 passages with their OSB notes, a topic for each day, a topic finder, and Memorize on every passage. Scripture only, no commentary.
-- **Prayers:** a simple prayer book with eight prayers and Psalm text, available offline.
-- **Personal study notes:** import your `reader-study-notes.json` in Reading settings to store your notes and introductions on this device for offline use. New Testament notes link from verses. Original Old Testament notes remain accessible below chapters in a reference browser; their alignment with LXX2012 is explicitly unverified.
-- **OSB reading context:** the updated personal import adds the complete introductions to all 76 OSB books and ten guides, including How to Read the Bible, the book overview, glossary, and lectionary. Open a book’s introduction above its verses, or browse Reading settings → OSB guides & book introductions. The five separately displayed additions use their parent book’s introduction; 4 Maccabees has no OSB introduction. The guides retain the source edition’s references and ebook navigation instructions.
-- **Saved:** filter your bookmarks, highlights, and comments.
-- **Go back:** drag right from a prayer, Wisdom topic, reading guide, book picker, or linked passage. The current view slides with your finger and reveals its parent. Release beyond roughly one third of the view to go back; a short drag, reversal, or touch cancellation restores the current view.
-- **Reading settings:** change text size, light/dark appearance, introductions, and notes.
-- **Device persistence:** reading position, saves, history, plan progress, and preferences are mirrored into IndexedDB. Startup recovers the newer copy from localStorage or IndexedDB. Imported OSB material stays in IndexedDB across app-cache updates.
-- **Storage & backup:** check offline readiness, request browser storage protection, repair missing offline files, and export a complete Reader ZIP or a smaller Bible-only JSON to Files or iCloud Drive. Restore previews the contents and keeps an undo copy; reader state and personal imports commit together.
-- **Reading tools:** recent passages, three reading plans with saved completion, focus mode, font selection, line spacing, and page tone. Search can be restricted to a testament, book, study notes, or guides. Notes and related passages open in previews. Returning from a note or guide restores its search or source-note list, including filters and scroll position. Reading-plan changes retain Reading settings as their back destination.
+## What is in the app
 
-Footer buttons always open their section’s main view. Preferences, saved verses, and imported study notes remain in this browser. Existing `obible3` data is preserved across the redesign. Calendar and Hours sections have been removed.
+- **Tabs:** Today (the day's Gospel from the Coptic Katameros, with the season, feast, and Synaxarium
+  commemorations; the Liturgy Psalm to carry; reading plan), Read, Wisdom (57 topics), Prayers (the Agpeya hours
+  and the prayer book). Library, text settings, and search are in the header.
+- **Read:** verses as the OSB prints them. Poetry lines hang and stanzas are spaced; a paragraph break inside a
+  verse stays a paragraph break; the edition's italics are kept; section headings sit where they fall, including
+  inside a verse, with the parallel passages printed under them; Psalms carry the OSB's titles ("Psalm 22 (23)").
+  A dot after a verse opens its OSB note. A small letter in the New Testament marks a translators' note.
+  Notes for the chapter, and any study article printed in that chapter, are listed below it.
+- **Numbering:** everything uses OSB numbering (Septuagint Psalms, 1 to 4 Kingdoms, 1 and 2 Ezra, Esther's
+  lettered verses such as 4:17a). Lectionary Psalms show the Orthodox number with the English one beside it.
+- **Saving, memory verses, plans, backup, the PDF/EPUB library, themes, gestures:** as in Reader.
 
-The Bible text is LXX2012 + WEB NT, not the printed Orthodox Study Bible’s SAAS/NKJV translation. There are no built-in (AI-written) introductions, notes, or guides: book introductions, footnotes, section headings, and guides come only from the owner’s Orthodox Study Bible, shipped as `osb-data.enc.json` (gzip + AES-256-GCM, key from a passphrase via PBKDF2-SHA256) and opened on a device with the private unlock link (`#osb=…`, kept in the address bar so a Home Screen app keeps it) or the passphrase in Reading settings. Rebuild it with `python3 scripts/align_osb_numbers.py <private-osb.json> <out.json> <osb-mobi.html>` (pins 99% of Old Testament notes to LXX2012 verses by number with a text check, and adds 2,010 section headings), then `node scripts/build_osb_pack.mjs <out.json>`; the unlock link is written to the git-ignored `.osb-unlock-link`. A hand-imported study file still works and takes precedence. Copyrighted library books and the full Kallistos article are not republished here. Their source links open online, and imported private copies stay on the reading device. PDF.js 6.4.299 and fflate 0.8.3 are vendored with their licenses so book reading and backups work offline.
+This edition keeps its own storage (`reader-osb-state`, `reader-osb-personal`, `reader-osb-library`, caches
+named `reader-osb-v*`), so it never touches the other Reader on the same site. Backups from the other Reader are
+refused because their verse numbers differ.
 
-No account or backend is required. Cloud sync is disabled by default and its settings are hidden until configured. Optional backend code is documented in `cloud/README.md`. Device storage is not a substitute for a backup outside the browser: clearing site data or losing the phone can remove both local copies.
+## Build (private inputs stay outside the repository)
+
+1. `python3 scripts/extract_osb_edition.py <osb-mobi.html> ~/Documents/reader-private/osb/osb-edition.json`
+   reads the raw MOBI HTML of the owner's copy and writes the private edition file: every verse with its printed
+   number, the layout of its lines, italics, translators' note letters, section headings and their parallel
+   passages, chapter titles, the study notes (each placed on the verse it names, including the notes on liturgical
+   use that the ebook does not link from a verse), translators' notes, book introductions, and study articles.
+   Stray spaces the ebook's markup leaves before punctuation are removed; no other character changes.
+   It prints counts only.
+2. `python3 scripts/build_osb_edition.py <osb-edition.json> <earlier-private-osb.json> <public-reader-dir> ~/Documents/reader-private/osb/build <KatamerosDatabase.db>`
+   writes the private `bible.json` and `study.json` (the ten front- and back-matter guides come from the earlier
+   private extraction and are checked against the ebook by the tests), and regenerates the public reference lists
+   `katameros-data.js` and `wisdom-data.js` in OSB numbering (numbers only, no text). English references are
+   mapped by aligning texts, with the lectionary's own English Bible, the WEB, and LXX2012 as witnesses; the
+   report lists anything unmapped or weak.
+3. `node scripts/encrypt_osb_edition.mjs ~/Documents/reader-private/osb/build` writes `bible.enc`, `study.enc`,
+   `edition.json`, and the git-ignored `.osb-unlock-link`. The passphrase comes from `$OSB_PASSPHRASE` or the
+   macOS Keychain item `unseen-warfare-pages`; the salt is `scripts/edition-salt.txt`.
+4. `node --test tests/*.test.cjs` runs against the private build (set `OSB_BUILD_DIR` if it lives elsewhere).
+5. `scripts/deploy_pages.sh` runs the tests, copies only the files the app serves, checks again that no Bible or
+   study text is among them, and publishes to the Pages repository.
+
+After any change to served files, raise `CACHE` in `sw.js`.
+
+## Checks the tests make
+
+- With the source ebook present, every verse, note, translators' note, introduction, guide, and article is
+  found in it word for word.
+- Canon, book names, 1,346 chapters and 36,089 verses present; New Testament verse counts match the NKJV.
+- Every verse renders with exactly its own words (notes on and off); italics and line layout cover what the
+  source marks; headings sit on existing verses.
+- Every study note sits on the verse its own reference names; every translators' note has its letter in the text.
+- Every lectionary reading through 2030 and every Wisdom passage resolves completely.
+- The encrypted packs are exactly the tested build, open only with the right key, and nothing readable is
+  among the published files.
 
 ## Local preview
 
-Run `python3 -m http.server 8080` in this directory, then open http://localhost:8080. No build step or external dependencies are required. Use an HTTP server rather than opening index.html as a file.
+`python3 -m http.server 8080`, then open `http://localhost:8080/#osb=<key>` (the link in `.osb-unlock-link`,
+with the host changed).
 
-See `GITHUB.md` for GitHub Pages and offline installation. Run regression checks with `node --test tests/*.test.cjs`.
-
-The app icon is the selected Jesus-with-halo outline. Its editable source is `icon.svg`; regenerate the phone and launcher PNGs with `python3 scripts/build_icons.py` (requires CairoSVG and Cairo; see the script for Homebrew library discovery). Inside the app, the header reads **Reader** and uses the separate fish mark in `fish.svg`.
-
-## Text and numbering
-
-- Old Testament: [LXX2012](https://ebible.org/eng-lxx2012/), Brenton’s Greek Septuagint translation with language updates by Michael Paul Johnson; public domain.
-- New Testament: existing World English Bible text, unchanged; public domain.
-- All 28,326 source verse records are preserved, including the source’s combined verse labels and omissions. No missing LXX verses are filled from WEB. Psalm 151 is a separate reader entry. Daniel’s additions and the Letter of Jeremiah retain their separate source books. The earlier Hebrew Esther duplicate and 2 Esdras are no longer in the main reader.
-- Psalm numbering follows LXX2012. Wisdom references and the Psalm 50 (51) prayer were updated. A Proverbs 22:6 Wisdom reference was removed because that verse is absent from this edition.
-- Existing OT bookmarks, highlights, and comments are preserved under Saved → Saved before the Septuagint update, with their original WEB wording and references. NT saves remain attached. `legacy-web-data.js` is retained solely for this offline migration and reference archive.
-- Imported OSB notes are not assumed to share LXX2012 verse numbering. All original note keys and text remain available through the notes browser below OT chapters. They are not pinned to unverified LXX verses.
-
-Rebuild with `python3 scripts/build_septuagint.py /path/to/eng-lxx2012_vpl.zip`. The source URL, SHA-256, and counts are recorded in `data/lxx2012-source.json`. The script takes the unchanged WEB NT and migration archive from commit `b42fa0d`.
-
-To rebuild a private context import from the owner’s extracted MOBI HTML, run `python3 scripts/build_personal_context.py /path/to/book.html /path/to/reader-study-notes.json /path/outside/repo/reader-osb-context.json` (requires BeautifulSoup). The resulting JSON includes the existing notes unchanged and stays outside the published repository. Import it on each reading device; IndexedDB persists it independently of app cache updates. Older notes-only imports remain supported.
-
-For source-linked notes, run `python3 scripts/align_personal_notes.py /path/to/book.html /path/to/reader-osb-context.json /path/outside/repo/reader-osb-complete.json`. This preserves the earlier notes and adds source verse text, conservative text matches, and review candidates. Only close, distinctive matches are attached automatically; unmatched notes remain browsable and can be linked after comparing both verses in the app. Text matching is not a scholarly verification of every verse. Output and the alignment review report contain private copyrighted material and must stay outside this repository.
+Lectionary references come from the open-source Katameros project (MIT). PDF.js and fflate are vendored with
+their licenses.

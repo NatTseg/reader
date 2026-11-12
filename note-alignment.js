@@ -22,48 +22,27 @@ function applyNoteAlignment(data) {
   }
 }
 function sourceNoteKeysForBook(book) {
-  const books=book==='S3Y'?['DAN']:book==='MAN'?['2CH']:[book];
-  return Object.keys(personalSourceNotes).filter(key=>books.includes(key.split(':')[0]));
+  return Object.keys(personalSourceNotes).filter(key=>key.split(':')[0]===book);
 }
+// A verse's translators' notes, each with its letter.
+function textNotesHtml(key) {
+  return (personalTextNotes[key]||[]).map(([letter,text])=>`<p class="text-note"><sup>${letter}</sup> ${esc(text)}</p>`).join('');
+}
+// The chapter's notes in verse order, with any study article printed in this chapter.
 function alignedChapterNotesHtml() {
   const prefix=`${state.book}:${state.chapter}:`;
-  const entries=Object.entries(personalNotesByVerse).filter(([key])=>key.startsWith(prefix)).sort((a,b)=>parseKey(a[0]).v-parseKey(b[0]).v);
+  const verses=[...new Set([...Object.keys(personalNotesByVerse),...Object.keys(personalTextNotes)].filter(key=>key.startsWith(prefix)))].sort((a,b)=>parseKey(a).v-parseKey(b).v);
+  const articles=chapterArticles(state.book,state.chapter);
   const count=sourceNoteKeysForBook(state.book).length;
-  const attached=entries.length?`<h2 class="section-label">OSB notes for this chapter</h2>${entries.map(([target,keys])=>keys.map(key=>`<article class="footnote"><small>Verse ${parseKey(target).v} · OSB source ${esc(key)}</small><p>${esc(personalSourceNotes[key].body)}</p><button class="text-button" data-note-key="${key}" data-source-note="true">Open note &amp; references ›</button></article>`).join('')).join('')}`:'';
-  return `<section class="footnotes">${attached}${count?`<button class="secondary" data-source-book="${state.book}">Browse all OSB source notes</button>`:''}<button class="text-button" data-study-book="${originalStudyBooks(state.book)[0]}">Earlier imported notes ›</button></section>`;
+  if(!verses.length&&!articles.length&&!count)return '';
+  const attached=verses.length?`<h2 class="section-label">OSB notes for this chapter</h2>${verses.map(target=>`<article class="footnote"><small>Verse ${esc(sourceVerseLabel(state.book,state.chapter,parseKey(target).v))}</small>${(personalNotesByVerse[target]||[]).map(key=>`<p>${esc(personalSourceNotes[key].body)}</p>`).join('')}${textNotesHtml(target)}</article>`).join('')}`:'';
+  const linked=articles.length?`<h2 class="section-label">Study article${articles.length>1?'s':''}</h2><div class="context-list">${articles.map(([i,g])=>`<button class="topic" data-context-guide="${i}"><span>${esc(g.title)}</span>${icon('right')}</button>`).join('')}</div>`:'';
+  return `<section class="footnotes">${linked}${attached}${count?`<button class="secondary" data-source-book="${state.book}">All notes in ${esc(displayName(state.book))}</button>`:''}</section>`;
 }
 function showSourceNotes(book,chapter) {
   const keys=sourceNoteKeysForBook(book),chapters=[...new Set(keys.map(k=>parseKey(k).ch))].sort((a,b)=>a-b);
-  chapter=chapters.includes(chapter)?chapter:chapters[0];
-  openDialog(`OSB notes · ${displayName(book)}`,`<label for="sourceNoteChapter">OSB chapter</label><select id="sourceNoteChapter">${chapters.map(ch=>`<option ${ch===chapter?'selected':''}>${ch}</option>`).join('')}</select>${keys.filter(k=>parseKey(k).ch===chapter).map(key=>`<button class="result" data-note-key="${key}" data-source-note="true"><strong>${esc(key)} · ${personalAlignment?.notes?.[key]?'Linked':'Needs review'}</strong><p>${esc(personalSourceNotes[key].body.slice(0,180))}…</p></button>`).join('')}`);
+  chapter=chapters.includes(chapter)?chapter:chapters.includes(state.chapter)&&book===state.book?state.chapter:chapters[0];
+  openDialog(`OSB notes · ${displayName(book)}`,`<label for="sourceNoteChapter">Chapter</label><select id="sourceNoteChapter">${chapters.map(ch=>`<option ${ch===chapter?'selected':''}>${ch}</option>`).join('')}</select>${keys.filter(k=>parseKey(k).ch===chapter).sort((a,b)=>parseKey(a).v-parseKey(b).v).map(key=>{const p=parseKey(key);return `<button class="result" data-note-key="${key}" data-source-note="true"><strong>${esc(refLabel(p.book,p.ch,p.v))}</strong><p>${esc(personalSourceNotes[key].body.slice(0,180))}${personalSourceNotes[key].body.length>180?'…':''}</p></button>`}).join('')}`);
   $('sourceNoteChapter').onchange=event=>showSourceNotes(book,+event.target.value);
   dialogRefresh=()=>showSourceNotes(book,chapter);
-}
-function showNoteLinkReview(key) {
-  const note=personalSourceNotes[key];if(!note)return;
-  const parent=captureSwipeView(dialog);
-  const noteParent=studyNoteParent;
-  const suggestion=personalAlignment?.notes?.[key]||personalAlignment?.candidates?.[key]?.target;
-  const initial=suggestion?parseKey(suggestion):{book:state.book,ch:state.chapter,v:1};
-  // The OSB verse and this Bible's verse side by side, with two equal actions.
-  openDialogAs('note-sheet','Verse link',`<button class="text-button" id="reviewBack">‹ Note</button><form id="noteLinkForm" class="link-review">
-    <section class="link-card"><span class="link-label">Orthodox Study Bible · ${esc(key.split(':').slice(1).join(':'))}</span><p>${esc(note.sourceVerse||'No verse text in this import.')}</p></section>
-    <section class="link-card"><label class="link-label" for="noteLinkRef">This Bible</label><input id="noteLinkRef" value="${esc(refLabel(initial.book,initial.ch,initial.v))}" autocomplete="off"><p id="noteLinkText"></p></section>
-    <div class="link-actions"><button class="secondary" id="removeNoteLink" type="button">Unlink</button><button class="primary" id="confirmNoteLink" type="submit">Link</button></div></form>`);
-  dialogBack=()=>showStudyNote(key,true,noteParent);dialogBackSnapshot=parent;$('reviewBack').onclick=dialogBack;
-  const read=()=>{const p=parseRef($('noteLinkRef').value);return p?.v?p:null};
-  const preview=()=>{const p=read();$('noteLinkText').textContent=p?verseText(p.book,p.ch,p.v):'Enter a valid book, chapter, and verse.';$('confirmNoteLink').disabled=!p};
-  $('noteLinkRef').oninput=preview;preview();
-  const save=async target=>{
-    try{
-      if(persistenceBusy)throw new Error('Wait for the current restore to finish.');
-      const data=await studyRead('notes');if(!data?.sourceNotes?.[key])throw new Error('Import the complete OSB file on this device first.');
-      data.alignment=data.alignment||{edition:window.BIBLE.edition,version:1,notes:{},verses:{},evidence:{},candidates:{}};
-      if(target){data.alignment.notes[key]=target;data.alignment.verses[key]=target;data.alignment.evidence[key]={method:'user-reviewed',score:1}}
-      else {delete data.alignment.notes[key];delete data.alignment.verses[key];delete data.alignment.evidence[key]}
-      await personalNotesStore('readwrite',validatePersonalNotes(data));personalNotesRevision++;applyPersonalNotes(data);queueCloudSync();showStudyNote(key,true,noteParent);notify(target?'Verse link saved.':'Note left unlinked.');
-    }catch(error){notify(error.message)}
-  };
-  $('noteLinkForm').onsubmit=event=>{event.preventDefault();const p=read();if(p)save(keyOf(p.book,p.ch,sourceVerseStart(p.book,p.ch,p.v)))};
-  $('removeNoteLink').onclick=()=>save(null);
 }

@@ -1,12 +1,12 @@
 // Today: the Coptic Katameros readings for the day, a verse to carry, and spaced memorization.
-// Reading references come from katameros-data.js; Scripture text always comes from this app's own Bible.
+// Reading references come from katameros-data.js, already in Orthodox Study Bible numbering; the text is this app's own.
 const COPTIC_MONTHS = ["Tout", "Baba", "Hatour", "Kiahk", "Toba", "Amshir", "Baramhat", "Baramouda", "Bashans", "Paona", "Epep", "Mesra", "Nasie"];
 // Katameros book ids (English Bible order plus deuterocanon) to this app's book ids.
 const KATAMEROS_BOOKS = {1:"GEN",2:"EXO",3:"LEV",4:"NUM",5:"DEU",6:"JOS",7:"JDG",8:"RUT",9:"1SA",10:"2SA",11:"1KI",12:"2KI",13:"1CH",14:"2CH",
   15:"EZR",16:"NEH",17:"EST",18:"JOB",19:"PSA",20:"PRO",21:"ECC",22:"SNG",23:"ISA",24:"JER",25:"LAM",26:"EZK",27:"DAN",28:"HOS",29:"JOL",
   30:"AMO",31:"OBA",32:"JON",33:"MIC",34:"NAM",35:"HAB",36:"ZEP",37:"HAG",38:"ZEC",39:"MAL",40:"MAT",41:"MRK",42:"LUK",43:"JHN",44:"ACT",
   45:"ROM",46:"1CO",47:"2CO",48:"GAL",49:"EPH",50:"PHP",51:"COL",52:"1TH",53:"2TH",54:"1TI",55:"2TI",56:"TIT",57:"PHM",58:"HEB",59:"JAS",
-  60:"1PE",61:"2PE",62:"1JN",63:"2JN",64:"3JN",65:"JUD",66:"REV",67:"BAR",68:"TOB",69:"JDT",70:"1MA",71:"2MA",72:"WIS",73:"SIR"};
+  60:"1PE",61:"2PE",62:"1JN",63:"2JN",64:"3JN",65:"JUD",66:"REV",67:"BAR",68:"TOB",69:"JDT",70:"1MA",71:"2MA",72:"WIS",73:"SIR",74:"BEL",75:"SUS"};
 const LITURGY_ORDER = ["Pauline Epistle", "Catholic Epistle", "Acts of the Apostles", "Psalm & Gospel"];
 const MEMORY_INTERVALS = [1, 2, 4, 7, 14, 30, 60, 120];
 
@@ -28,47 +28,26 @@ function copticDate(key) {
 function dayKeyDate(key) { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d); }
 function daysBetween(a, b) { return Math.round((dayKeyDate(b) - dayKeyDate(a)) / 86400000); }
 
-// Hebrew/English Psalm numbers (as the Katameros cites them) to this edition's Septuagint numbering.
-function psalmToLxx(chapter, verse) {
-  if (chapter <= 9) return [chapter, verse];
-  if (chapter === 10) return [9, 20 + verse];
-  if (chapter <= 146) return [chapter - 1, verse];
-  if (chapter === 147) return verse <= 11 ? [146, verse] : [147, verse - 11];
-  return [chapter, verse];
-}
-// One cited passage -> verses with text from this app. Jeremiah's Septuagint chapter order differs from the
-// English order the lectionary uses, so its text comes from the retained WEB Old Testament.
-function lectionaryPassage([bookId, chapter, verses]) {
+// One cited passage -> verses with text from this app. A Psalm carries the English number the lectionary cites
+// as a fourth element when it differs from the Orthodox (Septuagint) number.
+function lectionaryPassage([bookId, chapter, verses, cited = chapter]) {
   const book = KATAMEROS_BOOKS[bookId];
   if (!book) return null;
   const list = [];
-  // Daniel 14 (Bel and the Dragon) is its own book in this edition.
-  if (book === "DAN" && chapter === 14) {
-    for (const verse of verses) { const text = verseText("BEL", 1, verse); if (text) list.push({book: "BEL", ch: 1, v: verse, text, label: String(verse)}); }
-    return {book: "BEL", chapter: 1, cited: 14, verses: list, source: "LXX", openable: !!list.length};
+  for (const v of verses) {
+    const text = flatText(verseText(book, chapter, v));
+    if (text && !list.some(item => item.v === v)) list.push({book, ch: chapter, v, text, label: sourceVerseLabel(book, chapter, v)});
   }
-  if (book === "JER" && window.LEGACY_WEB?.t?.JER) {
-    for (const verse of verses) {
-      const text = window.LEGACY_WEB.t.JER[chapter - 1]?.[verse];
-      if (text) list.push({book, ch: chapter, v: verse, text, label: String(verse)});
-    }
-    return {book, chapter, cited: chapter, verses: list, source: "WEB", openable: false};
-  }
-  for (const verse of verses) {
-    const [ch, v] = book === "PSA" ? psalmToLxx(chapter, verse) : [chapter, verse];
-    const text = verseText(book, ch, v);
-    if (text && !list.some(item => item.ch === ch && item.v === sourceVerseStart(book, ch, v)))
-      list.push({book, ch, v: sourceVerseStart(book, ch, v), text, label: sourceVerseLabel(book, ch, v)});
-  }
-  return {book, chapter: list[0]?.ch ?? chapter, cited: chapter, verses: list, source: isSeptuagint(book) ? "LXX" : "WEB", openable: !!list.length};
+  return {book, chapter, cited, verses: list, openable: !!list.length};
 }
-function verseRuns(numbers) {
+// Consecutive verses as ranges of their printed numbers: "3–5, 9".
+function verseRuns(verses) {
   const runs = [];
-  for (const n of numbers) {
+  for (const verse of verses) {
     const last = runs.at(-1);
-    if (last && n === last[1] + 1) last[1] = n; else runs.push([n, n]);
+    if (last && Number(verse.v) === Number(last[1].v) + 1) last[1] = verse; else runs.push([verse, verse]);
   }
-  return runs.map(([a, b]) => a === b ? String(a) : `${a}–${b}`).join(", ");
+  return runs.map(([a, b]) => a === b ? a.label : `${a.label}–${b.label}`).join(", ");
 }
 function passageLabel(passages) {
   const parts = [];
@@ -76,12 +55,12 @@ function passageLabel(passages) {
   for (const p of passages) {
     if (!p || !p.verses.length) continue;
     const byChapter = new Map();
-    for (const verse of p.verses) { if (!byChapter.has(verse.ch)) byChapter.set(verse.ch, []); byChapter.get(verse.ch).push(Number(verse.v)); }
-    for (const [ch, numbers] of byChapter) {
+    for (const verse of p.verses) { if (!byChapter.has(verse.ch)) byChapter.set(verse.ch, []); byChapter.get(verse.ch).push({v: verse.v, label: verse.label ?? String(verse.v)}); }
+    for (const [ch, verses] of byChapter) {
       // Psalms follow the Orthodox convention: Septuagint number with the English number in parentheses.
-      const english = p.book === "PSA" && p.cited !== ch ? `(${p.cited})` : "";
+      const english = p.book === "PSA" && p.cited && p.cited !== ch ? `(${p.cited})` : "";
       const name = p.book === lastBook ? "" : `${p.book === "PSA" ? "Psalm" : displayName(p.book)} `;
-      parts.push(`${name}${p.book === "PS2" ? "" : `${p.book === lastBook && p.book === "PSA" ? "" : ""}${ch}${english}:`}${verseRuns(numbers)}`);
+      parts.push(`${name}${ch}${english}:${verseRuns(verses)}`);
       lastBook = p.book;
     }
   }
@@ -218,9 +197,9 @@ function renderToday(key = todayKey || localDayKey()) {
     const first = passages.find(p => p.openable);
     return `<details class="reading-card${done.has(id) ? " is-done" : ""}"${open ? " open" : ""}><summary><span class="reading-check" aria-hidden="true">${done.has(id) ? "✓" : ""}</span>
       <span><small>${esc(title)}</small><strong>${esc(passageLabel(passages))}</strong></span><span class="reading-min">${minutes} min</span></summary>
-      <div class="reading-text">${passages.map(p => `${p.source === "WEB" && p.book === "JER" ? `<p class="helper">Jeremiah ${p.cited}, English numbering</p>` : ""}${p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${scriptureHtml(v.text)}</p>`).join("")}`).join("")}
+      <div class="reading-text">${passages.map(p => p.verses.map(v => `<p><sup>${esc(v.label)}</sup> ${scriptureHtml(v.text)}</p>`).join("")).join("")}
       <div class="actions"><button class="${done.has(id) ? "secondary" : "primary"}" data-reading-done="${esc(id)}">${done.has(id) ? "Mark unread" : "Done reading"}</button>
-      ${first ? `<button class="text-button" data-today-visit="${first.book}:${first.chapter}:${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.book === "PS2" ? "" : first.chapter} ›</button>` : ""}
+      ${first ? `<button class="text-button" data-today-visit="${first.book}:${first.chapter}:${first.verses[0].v}">Open in ${esc(displayName(first.book))} ${first.chapter} ›</button>` : ""}
       <button class="text-button" data-memorize-reading="${esc(id)}">Memorize a verse…</button></div></div></details>`;
   };
   if (main) html += `<h2 class="section-label">Today's Gospel${done.has(main.id) ? ' <span class="complete-badge">✓ Read</span>' : ""}</h2><div class="reading-list main-reading">${readingCard(main.section, main.sub, main.sub.readings[main.index], main.index, !done.has(main.id))}</div>`;
@@ -358,7 +337,7 @@ function handleTodayAction(button) {
 }
 // Memorize a single verse from the Bible reader's verse dialog.
 function memorizeBibleVerse(book, ch, v) {
-  const text = verseText(book, ch, v);
+  const text = flatText(verseText(book, ch, v));
   if (!text) return false;
   const added = addMemoryVerse([{book, chapter: ch, verses: [{book, ch, v, text, label: sourceVerseLabel(book, ch, v)}]}]);
   persist();

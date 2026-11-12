@@ -1,226 +1,36 @@
 "use strict";
+// The Orthodox Study Bible's own book order.
 const GROUPS = [
   { label: "The Law", ids: ["GEN", "EXO", "LEV", "NUM", "DEU"] },
-  {
-    label: "Historical books",
-    ids: [
-      "JOS",
-      "JDG",
-      "RUT",
-      "1SA",
-      "2SA",
-      "1KI",
-      "2KI",
-      "1CH",
-      "2CH",
-      "1ES",
-      "EZR",
-      "NEH",
-      "TOB",
-      "JDT",
-      "EST",
-      "1MA",
-      "2MA",
-      "3MA",
-    ],
-  },
-  {
-    label: "Wisdom books",
-    ids: ["PSA", "PS2", "JOB", "PRO", "ECC", "SNG", "WIS", "SIR"],
-  },
-  {
-    label: "The Prophets",
-    ids: [
-      "HOS",
-      "AMO",
-      "MIC",
-      "JOL",
-      "OBA",
-      "JON",
-      "NAM",
-      "HAB",
-      "ZEP",
-      "HAG",
-      "ZEC",
-      "MAL",
-      "ISA",
-      "JER",
-      "BAR",
-      "LAM",
-      "EZK",
-      "DAN",
-      "LJE",
-      "S3Y",
-      "SUS",
-      "BEL",
-    ],
-  },
-  { label: "Appendix", ids: ["MAN", "4MA"] },
+  { label: "Historical books", ids: ["JOS", "JDG", "RUT", "1SA", "2SA", "1KI", "2KI", "1CH", "2CH", "1ES", "EZR", "NEH", "TOB", "JDT", "EST", "1MA", "2MA", "3MA"] },
+  { label: "Wisdom books", ids: ["PSA", "JOB", "PRO", "ECC", "SNG", "WIS", "SIR"] },
+  { label: "The Prophets", ids: ["HOS", "AMO", "MIC", "JOL", "OBA", "JON", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL", "ISA", "JER", "BAR", "LAM", "LJE", "EZK", "SUS", "DAN", "BEL"] },
   { label: "Holy Gospels", ids: ["MAT", "MRK", "LUK", "JHN"] },
   { label: "Acts", ids: ["ACT"] },
-  {
-    label: "Pauline epistles",
-    ids: [
-      "ROM",
-      "1CO",
-      "2CO",
-      "GAL",
-      "EPH",
-      "PHP",
-      "COL",
-      "1TH",
-      "2TH",
-      "1TI",
-      "2TI",
-      "TIT",
-      "PHM",
-      "HEB",
-    ],
-  },
-  {
-    label: "Catholic epistles",
-    ids: ["JAS", "1PE", "2PE", "1JN", "2JN", "3JN", "JUD"],
-  },
+  { label: "Pauline epistles", ids: ["ROM", "1CO", "2CO", "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI", "TIT", "PHM", "HEB"] },
+  { label: "Catholic epistles", ids: ["JAS", "1PE", "2PE", "1JN", "2JN", "3JN", "JUD"] },
   { label: "Revelation", ids: ["REV"] },
 ];
-const OSB_NAME = {
-  "1SA": "1 Kingdoms",
-  "2SA": "2 Kingdoms",
-  "1KI": "3 Kingdoms",
-  "2KI": "4 Kingdoms",
-  EZR: "1 Ezra (Ezra)",
-  NEH: "2 Ezra (Nehemiah)",
-  "1ES": "1 Esdras",
-  "2ES": "2 Esdras",
-  EST: "Esther",
-  ESG: "Esther (LXX)",
-  SNG: "Song of Songs",
-  WIS: "Wisdom of Solomon",
-  SIR: "Wisdom of Sirach",
-  BAR: "Baruch",
-  PS2: "Psalm 151",
-  MAN: "Prayer of Manasseh",
-  DAG: "Daniel (LXX additions)",
-  "1MA": "1 Maccabees",
-  "2MA": "2 Maccabees",
-  "3MA": "3 Maccabees",
-  "4MA": "4 Maccabees",
-};
-
+// Other names people type for a book. The OSB's own names (1 Kingdoms, 2 Ezra) match without an entry here.
 const ALIASES = {
-  genesis: "GEN",
-  exodus: "EXO",
-  exo: "EXO",
-  leviticus: "LEV",
-  lev: "LEV",
-  numbers: "NUM",
-  num: "NUM",
-  deuteronomy: "DEU",
-  deut: "DEU",
-  joshua: "JOS",
-  josh: "JOS",
-  judges: "JDG",
-  ruth: "RUT",
-  "1samuel": "1SA",
-  "1sam": "1SA",
-  "1sa": "1SA",
-  "1kingdoms": "1SA",
-  "2samuel": "2SA",
-  "2sam": "2SA",
-  "2kingdoms": "2SA",
-  "1kings": "1KI",
-  "3kingdoms": "1KI",
-  "2kings": "2KI",
-  "4kingdoms": "2KI",
-  "1chronicles": "1CH",
-  "1chr": "1CH",
-  "2chronicles": "2CH",
-  ezra: "EZR",
-  nehemiah: "NEH",
-  neh: "NEH",
-  esther: "EST",
-  job: "JOB",
-  psalm: "PSA",
-  psalms: "PSA",
-  ps: "PSA",
-  proverbs: "PRO",
-  pro: "PRO",
-  ecclesiastes: "ECC",
-  song: "SNG",
-  songofsongs: "SNG",
-  songofsolomon: "SNG",
-  isaiah: "ISA",
-  isa: "ISA",
-  jeremiah: "JER",
-  jer: "JER",
-  lamentations: "LAM",
-  ezekiel: "EZK",
-  eze: "EZK",
-  daniel: "DAN",
-  dan: "DAN",
-  hosea: "HOS",
-  joel: "JOL",
-  amos: "AMO",
-  obadiah: "OBA",
-  jonah: "JON",
-  micah: "MIC",
-  nahum: "NAM",
-  habakkuk: "HAB",
-  zephaniah: "ZEP",
-  haggai: "HAG",
-  zechariah: "ZEC",
-  malachi: "MAL",
-  matthew: "MAT",
-  matt: "MAT",
-  mat: "MAT",
-  mark: "MRK",
-  luke: "LUK",
-  luk: "LUK",
-  john: "JHN",
-  acts: "ACT",
-  romans: "ROM",
-  rom: "ROM",
-  "1corinthians": "1CO",
-  "1cor": "1CO",
-  "1co": "1CO",
-  "2corinthians": "2CO",
-  "2cor": "2CO",
-  galatians: "GAL",
-  ephesians: "EPH",
-  philippians: "PHP",
-  phil: "PHP",
-  colossians: "COL",
-  "1thessalonians": "1TH",
-  "2thessalonians": "2TH",
-  "1timothy": "1TI",
-  "2timothy": "2TI",
-  titus: "TIT",
-  philemon: "PHM",
-  hebrews: "HEB",
-  heb: "HEB",
-  james: "JAS",
-  "1peter": "1PE",
-  "2peter": "2PE",
-  "1john": "1JN",
-  "2john": "2JN",
-  "3john": "3JN",
-  jude: "JUD",
-  revelation: "REV",
-  rev: "REV",
-  tobit: "TOB",
-  judith: "JDT",
-  wisdom: "WIS",
-  sirach: "SIR",
-  ecclesiasticus: "SIR",
-  baruch: "BAR",
-  "1maccabees": "1MA",
-  "2maccabees": "2MA",
-  "3maccabees": "3MA",
-  "4maccabees": "4MA",
-  "1esdras": "1ES",
-  "2esdras": "2ES",
-  manasseh: "MAN",
-  psalm151: "PS2",
+  genesis: "GEN", gen: "GEN", exodus: "EXO", exo: "EXO", leviticus: "LEV", lev: "LEV", numbers: "NUM", num: "NUM",
+  deuteronomy: "DEU", deut: "DEU", joshua: "JOS", josh: "JOS", judges: "JDG", ruth: "RUT",
+  "1samuel": "1SA", "1sam": "1SA", "1sa": "1SA", "2samuel": "2SA", "2sam": "2SA", "1kings": "1KI", "2kings": "2KI",
+  "1chronicles": "1CH", "1chr": "1CH", "2chronicles": "2CH", "2chr": "2CH",
+  "1esdras": "1ES", ezra: "EZR", "2esdras": "EZR", nehemiah: "NEH", neh: "NEH", tobit: "TOB", judith: "JDT", esther: "EST",
+  "1maccabees": "1MA", "2maccabees": "2MA", "3maccabees": "3MA",
+  psalm: "PSA", psalms: "PSA", ps: "PSA", job: "JOB", proverbs: "PRO", prov: "PRO", pro: "PRO", ecclesiastes: "ECC",
+  song: "SNG", songofsongs: "SNG", songofsolomon: "SNG", wisdom: "WIS", sirach: "SIR", ecclesiasticus: "SIR",
+  hosea: "HOS", amos: "AMO", micah: "MIC", joel: "JOL", obadiah: "OBA", jonah: "JON", nahum: "NAM", habakkuk: "HAB",
+  zephaniah: "ZEP", haggai: "HAG", zechariah: "ZEC", malachi: "MAL", isaiah: "ISA", isa: "ISA", jeremiah: "JER", jer: "JER",
+  baruch: "BAR", lamentations: "LAM", letterofjeremiah: "LJE", ezekiel: "EZK", eze: "EZK", daniel: "DAN", dan: "DAN",
+  bel: "BEL", belandthedragon: "BEL",
+  matthew: "MAT", matt: "MAT", mat: "MAT", mark: "MRK", luke: "LUK", luk: "LUK", john: "JHN", acts: "ACT",
+  romans: "ROM", rom: "ROM", "1corinthians": "1CO", "1cor": "1CO", "1co": "1CO", "2corinthians": "2CO", "2cor": "2CO",
+  galatians: "GAL", ephesians: "EPH", philippians: "PHP", phil: "PHP", colossians: "COL",
+  "1thessalonians": "1TH", "2thessalonians": "2TH", "1timothy": "1TI", "2timothy": "2TI", titus: "TIT", philemon: "PHM",
+  hebrews: "HEB", heb: "HEB", james: "JAS", "1peter": "1PE", "2peter": "2PE", "1john": "1JN", "2john": "2JN", "3john": "3JN",
+  jude: "JUD", revelation: "REV", rev: "REV",
 };
 const $ = (id) => document.getElementById(id);
 const pane = $("pane");
@@ -284,32 +94,22 @@ function bookMeta(id) {
   return window.BIBLE.books.find((b) => b.id === id);
 }
 function displayName(id) {
-  return OSB_NAME[id] || bookMeta(id)?.name || id;
+  return bookMeta(id)?.name || id;
 }
 function chapterText(book, ch) {
   return window.BIBLE.t[book]?.[ch - 1] || [];
 }
 function verseText(book, ch, v) {
-  return chapterText(book, ch)[sourceVerseStart(book, ch, v)] || "";
+  return chapterText(book, ch)[v] || "";
 }
-// Fix formatting errors once at load: printing ligatures (ﬁ, ﬂ) and a missing space before an opening quote.
-// LXX2012's caret after "you" (you⌃) is kept: it marks a plural "you" in the Greek.
-function cleanScriptureText(text) {
-  return typeof text === "string" ? text.replace(/\ufb01/g, "fi").replace(/\ufb02/g, "fl").replace(/([,.;:!?])([“‘])/g, "$1 $2") : text;
-}
-// Escaped verse text with the plural-you caret shown as a small, labelled mark.
 function scriptureHtml(text) {
-  return esc(text).replace(/\u2303/g, '<span class="plural-you" title="plural you" aria-label="plural">⌃</span>');
-}
-for (const source of [window.BIBLE?.t, window.LEGACY_WEB?.t]) {
-  const needsCleaning = /[\ufb01\ufb02]|[,.;:!?][“‘]/;
-  for (const chapters of Object.values(source || {})) for (const verses of chapters) for (let i = 0; i < verses.length; i++) if (needsCleaning.test(verses[i])) verses[i] = cleanScriptureText(verses[i]);
+  return esc(flatText(text));
 }
 function keyOf(book, ch, v) {
   return `${book}:${ch}:${v}`;
 }
 function refLabel(book, ch, v) {
-  return `${displayName(book)}${book === "PS2" ? "" : " " + ch}${v ? ":" + v : ""}`;
+  return `${displayName(book)} ${ch}${v ? ":" + sourceVerseLabel(book, ch, v) : ""}`;
 }
 function parseKey(key) {
   const [book, ch, v] = key.split(":");
@@ -324,11 +124,8 @@ function bookmarked(book, ch, v) {
   );
 }
 function noteAt(book, ch, v) {
-  const sourceKey = typeof personalNotesByVerse !== "undefined" && personalNotesByVerse[keyOf(book,ch,v)]?.[0];
-  if (sourceKey) return {...personalSourceNotes[sourceKey], sourceKey};
-  if (typeof personalSourceNotes !== "undefined" && Object.keys(personalSourceNotes).length) return null;
-  if (isSeptuagint(book)) return null;
-  return window.STUDY?.notes?.[keyOf(book, ch, v)];
+  const sourceKey = personalNotesByVerse[keyOf(book, ch, v)]?.[0];
+  return sourceKey ? {...personalSourceNotes[sourceKey], sourceKey} : null;
 }
 function notify(message) {
   $("toast").textContent = message;
@@ -341,7 +138,7 @@ function persist() {
   if (typeof recordHistory === "function" && state.tab === "bible") recordHistory();
   state.savedAt = Math.max(Date.now(), (Number(state.savedAt) || 0) + 1);
   try {
-    localStorage.setItem("obible3", JSON.stringify(state));
+    localStorage.setItem("reader-osb-state", JSON.stringify(state));
   } catch {
     if (!storageWarned) {
       notify(
@@ -351,14 +148,12 @@ function persist() {
     }
   }
   if (typeof saveReaderCopy === "function") saveReaderCopy();
-  if (typeof queueCloudSync === "function") queueCloudSync();
 }
 function loadPrefs(override) {
   try {
-    const stored = override === undefined ? JSON.parse(localStorage.getItem("obible3") || "{}") : override;
+    const stored = override === undefined ? JSON.parse(localStorage.getItem("reader-osb-state") || "{}") : override;
     if (stored && typeof stored === "object") Object.assign(state, migrateEdition(stored));
   } catch {}
-  if (!Array.isArray(state.legacySaved)) state.legacySaved = [];
   if (!bookMeta(state.book)) state.book = "JHN";
   if (
     !Number.isInteger(state.chapter) ||
@@ -469,7 +264,6 @@ function goChapter(book, ch, verse = null) {
   closeDialog();
   renderChapter(0);
   persist();
-  if (verse) verse = sourceVerseStart(book, ch, verse);
   if (verse)
     requestAnimationFrame(() =>
       pane
@@ -492,15 +286,62 @@ function nextChapter(direction) {
   const next = adjacent(direction);
   if (next) goChapter(next.book, next.ch);
 }
+// One line of a verse as HTML. italics: [[start, end]] in the line (the edition's own italics: words the translators
+// supplied, Old Testament quotations); letters: [[offset, html]], the small letters of the translators' notes.
+// Marks for a note or comment stay on the line with the verse's last word, never alone on a line of their own.
+function lineHtml(line, italics, letters, marks) {
+  if (!marks && !letters.length && !italics.length) return esc(line);
+  const render = (from, to, last) => {
+    const points = new Set([from, to]);
+    for (const [start, end] of italics) for (const at of [start, end]) if (at > from && at < to) points.add(at);
+    for (const [offset] of letters) if (offset > from && offset < to) points.add(offset);
+    const cuts = [...points].sort((x, y) => x - y);
+    const lettersAt = (at) => letters.filter(([offset]) => offset === at).map(([, html]) => html).join("");
+    let html = "";
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const text = esc(line.slice(cuts[i], cuts[i + 1]));
+      html += lettersAt(cuts[i]) + (italics.some(([start, end]) => start <= cuts[i] && end >= cuts[i + 1]) ? `<i>${text}</i>` : text);
+    }
+    return html + (last ? lettersAt(to) : "");
+  };
+  if (!marks && !letters.length) return render(0, line.length, true);
+  const cut = line.lastIndexOf(" ") + 1;
+  return `${render(0, cut, false)}<span class="nw">${render(cut, line.length, true)}${marks}</span>`;
+}
+// A verse printed on several lines keeps them. BIBLE.layout has one letter per line: l a poetry line, s the first
+// line of a stanza, p a paragraph, c the rest of a paragraph. Poetry lines hang; paragraphs do not.
+// A section heading that falls inside a verse is shown between its lines.
+function verseBodyHtml(key, text, marks) {
+  const codes = window.BIBLE.layout?.[key];
+  const letters = (state.showNotes && personalTextNotes[key] && window.BIBLE.marks?.[key]) || [];
+  const italics = window.BIBLE.italics?.[key] || [];
+  // A letter at the very end of a line belongs to that line (the next line starts one character later).
+  const lettersIn = (start, length) => letters.filter(([offset]) => offset >= start && offset <= start + length)
+    .map(([offset, letter]) => [offset - start, `<sup class="tn" role="button" tabindex="0" data-action="note" data-key="${key}" aria-label="Translators’ note ${letter}">${letter}</sup>`]);
+  const italicsIn = (start, length) => italics.filter(([from, to]) => to > start && from < start + length)
+    .map(([from, to]) => [Math.max(0, from - start), Math.min(length, to - start)]);
+  if (!codes) return `<span>${lineHtml(text, italicsIn(0, text.length), lettersIn(0, text.length), marks)}</span>`;
+  const lines = text.split("\n"), inside = window.BIBLE.inside?.[key] || [];
+  let start = 0;
+  return `<div class="verse-lines">${lines.map((line, i) => {
+    const code = codes[i] || "p", poetry = code === "l" || code === "s", last = i === lines.length - 1;
+    const headings = inside.filter(([at]) => at === i).map(([, list]) => list.map((h) => `<h3 class="osb-heading">${esc(h)}</h3>`).join("")).join("");
+    const html = `${headings}<span class="${poetry ? "vl" : "vp"}${code === "s" && i ? " stanza" : ""}">${lineHtml(line, italicsIn(start, line.length), lettersIn(start, line.length), last ? marks : "")}</span>`;
+    start += line.length + 1;
+    return html;
+  }).join("")}</div>`;
+}
 function verseHtml(book, ch, v) {
-  v = sourceVerseStart(book, ch, v);
   const text = verseText(book, ch, v);
   if (!text) return "";
   const key = keyOf(book, ch, v),
+    label = sourceVerseLabel(book, ch, v),
     color = state.highlights[key],
     bm = bookmarked(book, ch, v),
-    note = state.showNotes && noteAt(book, ch, v);
-  return `<div class="verse${color ? " hl-" + color : ""}${bm ? " bookmarked" : ""}" data-key="${key}" data-verse="${v}"><button class="verse-number" data-action="verse" data-key="${key}" aria-label="Actions for ${esc(refLabel(book, ch, v))}${bm ? ", bookmarked" : ""}${color ? ", highlighted" : ""}" title="Save, highlight, or comment">${sourceVerseLabel(book, ch, v)}</button><span>${scriptureHtml(text)}</span>${note ? `<button class="note-link" data-action="note" data-key="${key}" aria-label="Study note for verse ${v}"><span class="note-dot" aria-hidden="true"></span></button>` : ""}${state.comments[key] ? `<button class="note-link" data-action="verse" data-key="${key}" aria-label="Your comment on verse ${v}"><span class="comment-mark" aria-hidden="true">✎</span></button>` : ""}</div>`;
+    note = state.showNotes && noteAt(book, ch, v),
+    stanza = window.BIBLE.layout?.[key]?.[0] === "s";
+  const marks = `${note ? `<button class="note-link" data-action="note" data-key="${key}" aria-label="Study note for verse ${label}"><span class="note-dot" aria-hidden="true"></span></button>` : ""}${state.comments[key] ? `<button class="note-link" data-action="verse" data-key="${key}" aria-label="Your comment on verse ${label}"><span class="comment-mark" aria-hidden="true">✎</span></button>` : ""}`;
+  return `<div class="verse${color ? " hl-" + color : ""}${bm ? " bookmarked" : ""}${stanza ? " stanza" : ""}" data-key="${key}" data-verse="${v}"><button class="verse-number" data-action="verse" data-key="${key}" aria-label="Actions for ${esc(refLabel(book, ch, v))}${bm ? ", bookmarked" : ""}${color ? ", highlighted" : ""}" title="Save, highlight, or comment">${label}</button>${verseBodyHtml(key, text, marks)}</div>`;
 }
 function rangeHtml(
   book,
@@ -509,40 +350,18 @@ function rangeHtml(
   end = chapterText(book, ch).length - 1,
 ) {
   let html = "";
-  const seen = new Set();
   for (let v = start; v <= Math.min(end, chapterText(book, ch).length - 1); v++) {
-    const first = sourceVerseStart(book, ch, v);
-    if (!seen.has(first)) {
-      const headings = personalHeadings[keyOf(book, ch, first)];
-      if (headings) html += headings.map(text => `<h3 class="osb-heading">${esc(text)}</h3>`).join("");
-      html += verseHtml(book, ch, first);
-    }
-    seen.add(first);
+    const headings = window.BIBLE.headings?.[keyOf(book, ch, v)];
+    if (headings) html += headings.map((text) => `<h3 class="osb-heading">${esc(text)}</h3>`).join("");
+    // The parallel passages the edition prints under a section heading.
+    const parallel = headings && window.BIBLE.parallels?.[keyOf(book, ch, v)];
+    if (parallel) html += `<p class="osb-parallel">${esc(parallel)}</p>`;
+    html += verseHtml(book, ch, v);
   }
   return html;
 }
 function notesHtml() {
-  if (!state.showNotes) return "";
-  if (typeof personalSourceNotes !== "undefined" && Object.keys(personalSourceNotes).length) return alignedChapterNotesHtml();
-  if (isSeptuagint(state.book)) return legacyStudyNotesHtml(state.book);
-  const entries = Object.entries(window.STUDY?.notes || {})
-    .filter(([k]) => k.startsWith(`${state.book}:${state.chapter}:`))
-    .sort((a, b) => parseKey(a[0]).v - parseKey(b[0]).v);
-  if (!entries.length) return "";
-  return `<section class="footnotes"><h2 class="section-label">${personalNotesCount ? "Orthodox Study Bible · personal notes" : "Study notes"}</h2>${entries
-    .map(
-      ([key, n]) =>
-        `<article class="footnote" id="note-${key}"><small>Verse ${parseKey(key).v} · ${esc(n.kind || "Note")}</small><h3>${esc(n.title || "")}</h3><p>${esc(n.body)}</p>${(
-          n.see || []
-        )
-          .map((k) => {
-            const p = parseKey(k);
-            if (isSeptuagint(p.book) || window.LEGACY_WEB?.t[p.book]) return `<span class="helper">Original reference: ${esc(originalBookName(p.book))} ${p.ch}:${p.v} (previous numbering)</span>`;
-            return `<button class="text-button" data-action="jump" data-key="${k}">${esc(refLabel(p.book, p.ch, p.v))}</button>`;
-          })
-          .join("")}</article>`,
-    )
-    .join("")}</section>`;
+  return state.showNotes ? alignedChapterNotesHtml() : "";
 }
 function renderChapter(scroll = 0) {
   cancelBackSlide();
@@ -550,11 +369,10 @@ function renderChapter(scroll = 0) {
   $("previous").disabled = !adjacent(-1);
   $("next").disabled = !adjacent(1);
   const osbIntro = personalIntroductions[state.book];
-  const intro = !state.showPreamble ? ""
-    : osbIntro ? `<details class="introduction osb-intro"><summary>Introduction to ${esc(displayName(state.book))} <small>Orthodox Study Bible</small></summary><div class="osb-intro-body">${studyArticleHtml(osbIntro)}</div></details>`
-    : !personalNotesCount && state.chapter === 1 ? `<p class="helper osb-locked"><button class="text-button" data-open-settings="true">Unlock OSB notes</button></p>`
-    : "";
-  pane.innerHTML = `<div class="content"><p class="eyebrow">${esc(displayName(state.book))}</p><div class="chapter-heading"><h1>${state.book === "PS2" ? "Psalm 151" : "Chapter " + state.chapter}</h1></div><p class="translation-label">${isSeptuagint(state.book) ? "Septuagint · LXX2012" : "World English Bible · New Testament"}</p>${intro}<article class="verses">${rangeHtml(state.book, state.chapter)}</article><div class="chapter-end"><button class="secondary" data-direction="-1" ${!adjacent(-1) ? "disabled" : ""}>Previous</button><button class="secondary" data-direction="1" ${!adjacent(1) ? "disabled" : ""}>Next chapter</button></div>${notesHtml()}</div>`;
+  const intro = state.showPreamble && osbIntro ? `<details class="introduction osb-intro"><summary>Introduction to ${esc(displayName(state.book))} <small>Orthodox Study Bible</small></summary><div class="osb-intro-body">${studyArticleHtml(osbIntro)}</div></details>` : "";
+  // Text the OSB prints before the first numbered verse of a chapter.
+  const preface = window.BIBLE.preface?.[`${state.book}:${state.chapter}`];
+  pane.innerHTML = `<div class="content"><p class="eyebrow">${esc(displayName(state.book))}</p><div class="chapter-heading"><h1>${esc(window.BIBLE.titles?.[`${state.book}:${state.chapter}`] || `${state.book === "PSA" ? "Psalm" : "Chapter"} ${state.chapter}`)}</h1></div><p class="translation-label">${isSeptuagint(state.book) ? "St. Athanasius Academy Septuagint" : "New King James Version"}</p>${intro}<article class="verses">${preface ? `<p class="chapter-preface">${esc(preface)}</p>` : ""}${rangeHtml(state.book, state.chapter)}</article><div class="chapter-end"><button class="secondary" data-direction="-1" ${!adjacent(-1) ? "disabled" : ""}>Previous</button><button class="secondary" data-direction="1" ${!adjacent(1) ? "disabled" : ""}>Next chapter</button></div>${notesHtml()}</div>`;
   pane.scrollTop = scroll * (pane.scrollHeight - pane.clientHeight);
   // A chapter that fits on one screen is read as soon as it is shown.
   if (typeof markPlanChapterRead === "function" && pane.scrollHeight && pane.scrollHeight <= pane.clientHeight + 40) markPlanChapterRead(state.book, state.chapter);
@@ -577,7 +395,7 @@ function renderWisdom() {
   if (!wisdomTopic) {
     const daily = wisdomTopicOfDay(), [b, c, v, end = v] = daily.refs[0];
     pane.innerHTML = `<div class="content wisdom"><h1>Wisdom</h1>
-      <button class="wisdom-daily" data-topic="${daily.id}"><small>For today · ${esc(daily.title)}</small><span>${esc(Array.from({length: end - v + 1}, (_, i) => verseText(b, c, v + i)).filter(Boolean).join(" "))}</span><em>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</em></button>
+      <button class="wisdom-daily" data-topic="${daily.id}"><small>For today · ${esc(daily.title)}</small><span>${esc(Array.from({length: end - v + 1}, (_, i) => flatText(verseText(b, c, v + i))).filter(Boolean).join(" "))}</span><em>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</em></button>
       <label class="visually-hidden" for="wisdomFilter">Find a topic</label><input id="wisdomFilter" class="wisdom-filter" type="search" placeholder="Find a topic" autocomplete="off" value="${esc(wisdomFilter)}">
       <div id="wisdomList">${window.WISDOM.categories.map((cat) => `<section class="wisdom-category"><h2 class="section-label">${esc(cat.label)}</h2><div class="topic-grid">${cat.topics.map((t) => `<button class="topic" data-topic="${t.id}" data-search="${esc((t.title + " " + t.tags).toLowerCase())}"><span>${esc(t.title)}</span><small>${t.refs.length}</small>${icon("right")}</button>`).join("")}</div></section>`).join("")}<p class="helper" id="wisdomEmpty" hidden>No topics found.</p></div></div>`;
     const filter = () => {
@@ -608,8 +426,8 @@ function memorizeWisdomPassage(spec) {
   const [book, ch, start, end] = spec.split(":").map((x, i) => i ? Number(x) : x);
   const verses = [];
   for (let v = start; v <= end; v++) {
-    const first = sourceVerseStart(book, ch, v), text = verseText(book, ch, first);
-    if (text && !verses.some((x) => x.v === first)) verses.push({book, ch, v: first, text, label: sourceVerseLabel(book, ch, first)});
+    const text = flatText(verseText(book, ch, v));
+    if (text) verses.push({book, ch, v, text, label: sourceVerseLabel(book, ch, v)});
   }
   if (!verses.length || typeof addMemoryVerse !== "function") return;
   const added = addMemoryVerse([{book, chapter: ch, verses}]);
@@ -730,12 +548,11 @@ function renderSaved() {
       ? keys
           .map((key) => {
             const p = parseKey(key);
-            return `<button class="result ${state.highlights[key] ? "hl-" + state.highlights[key] : ""}" data-action="jump" data-key="${key}"><strong>${esc(refLabel(p.book, p.ch, p.v))}</strong><p>${esc(verseText(p.book, p.ch, p.v))}</p>${state.comments[key] ? `<small>Your note: ${esc(state.comments[key])}</small>` : ""}</button>`;
+            return `<button class="result ${state.highlights[key] ? "hl-" + state.highlights[key] : ""}" data-action="jump" data-key="${key}"><strong>${esc(refLabel(p.book, p.ch, p.v))}</strong><p>${scriptureHtml(verseText(p.book, p.ch, p.v))}</p>${state.comments[key] ? `<small>Your note: ${esc(state.comments[key])}</small>` : ""}</button>`;
           })
           .join("")
-      : (state.legacySaved || []).length ? "" : `<div class="empty">${icon("bookmark")}<h2>Nothing saved yet</h2></div>`
+      : `<div class="empty">${icon("bookmark")}<h2>Nothing saved yet</h2></div>`
   }</div>`;
-  pane.querySelector(".content")?.insertAdjacentHTML("beforeend", legacySavedHtml());
   if ($("startReading")) $("startReading").onclick = () => openTab("bible");
   pane.scrollTop = 0;
 }
@@ -843,14 +660,16 @@ function chapterListHtml(book) {
   const visited = new Set((state.history || []).filter((h) => h.book === book).map((h) => h.chapter));
   return `<div class="chapter-grid">${Array.from({ length: bookMeta(book).n }, (_, i) => {
     const ch = i + 1, current = state.book === book && state.chapter === ch;
-    return `<button data-chapter="${ch}" data-chapter-book="${book}" aria-label="Chapter ${ch}${current ? ", reading" : ""}" ${current ? 'aria-current="true"' : visited.has(ch) ? 'class="visited"' : ""}>${book === "PS2" ? 151 : ch}</button>`;
+    return `<button data-chapter="${ch}" data-chapter-book="${book}" aria-label="Chapter ${ch}${current ? ", reading" : ""}" ${current ? 'aria-current="true"' : visited.has(ch) ? 'class="visited"' : ""}>${ch}</button>`;
   }).join("")}</div>`;
 }
 // OSB section headings in the chapter being read, for jumping within it.
 function chapterSectionsHtml(book, ch) {
-  const prefix = `${book}:${ch}:`;
-  const entries = Object.entries(personalHeadings || {}).filter(([key]) => key.startsWith(prefix)).map(([key, list]) => [Number(key.split(":")[2]), list]).sort((x, y) => x[0] - y[0]);
-  return entries.length ? `<h3 class="section-label">In this chapter</h3><div class="drawer-sections">${entries.map(([v, list]) => `<button data-jump-verse="${v}"><span>${esc(list.join(" · "))}</span><small>${v}</small></button>`).join("")}</div>` : "";
+  const prefix = `${book}:${ch}:`, entries = [];
+  for (const [key, list] of Object.entries(window.BIBLE.headings || {})) if (key.startsWith(prefix)) entries.push([Number(key.split(":")[2]), 0, list]);
+  for (const [key, items] of Object.entries(window.BIBLE.inside || {})) if (key.startsWith(prefix)) for (const [line, list] of items) entries.push([Number(key.split(":")[2]), line, list]);
+  entries.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  return entries.length ? `<h3 class="section-label">In this chapter</h3><div class="drawer-sections">${entries.map(([v, line, list]) => `<button data-jump-verse="${v}"${line ? ` data-jump-line="${line}"` : ""}><span>${esc(list.join(" · "))}</span><small>${esc(sourceVerseLabel(book, ch, v))}</small></button>`).join("")}</div>` : "";
 }
 function showChapterDrawer(book = state.book) {
   const previous = neighboringBook(book, -1),
@@ -908,36 +727,24 @@ function showChapters(book) {
   dialogBackSnapshot = parentView;
   $("backBooks").onclick = () => showBooks();
 }
+// "John 3:16", "Psalm 22", "Esther 4:17a", "Sirach 2:1-6": verse numbers are the printed ones.
 function parseRef(raw) {
   const s = raw.trim().toLowerCase();
-  if (/^psalms?\s*151(?:\s*:\s*\d+)?$/.test(s)) {
-    const verse = s.includes(":") ? +s.split(":")[1] : null;
-    return verse && !validVerse("PS2", 1, verse)
-      ? null
-      : { book: "PS2", ch: 1, v: verse };
-  }
-  const match = s.match(/^(.+?)\s+(\d+)(?::(\d+)(?:[-–](\d+))?)?$/);
+  if (/^(?:the\s+)?prayer\s+of\s+(?:king\s+)?manasseh$/.test(s)) return { book: "2CH", ch: 37, v: null };
+  const match = s.match(/^(.+?)\s+(\d+)(?:\s*:\s*(\d+[a-z]{0,2})(?:\s*[-–]\s*(\d+[a-z]{0,2}))?)?$/);
   const name = (match ? match[1] : s).replace(/[.\s]/g, "");
   const book =
     ALIASES[name] ||
     window.BIBLE.books.find((b) =>
-      [b.id, b.name, displayName(b.id)].some(
-        (n) => n.toLowerCase().replace(/[.\s]/g, "") === name,
-      ),
+      [b.id, b.name].some((n) => n.toLowerCase().replace(/[.\s]/g, "") === name),
     )?.id;
-  if (!book) return null;
-  if (!bookMeta(book)) return null;
-  const ch = match ? +match[2] : 1,
-    v = match?.[3] ? +match[3] : null,
-    end = match?.[4] ? +match[4] : v;
-  if (
-    ch < 1 ||
-    ch > bookMeta(book).n ||
-    (v !== null &&
-      (!validVerse(book, ch, v) || end < v || !validVerse(book, ch, end)))
-  )
-    return null;
-  return { book, ch, v };
+  if (!book || !bookMeta(book)) return null;
+  const ch = match ? +match[2] : 1;
+  if (ch < 1 || ch > bookMeta(book).n) return null;
+  if (!match?.[3]) return { book, ch, v: null };
+  const v = versePosition(book, ch, match[3]),
+    end = match[4] ? versePosition(book, ch, match[4]) : v;
+  return v && end && end >= v ? { book, ch, v } : null;
 }
 function showSearch() {
   openDialog(
@@ -979,7 +786,7 @@ async function runSearch() {
   }
   results.innerHTML = '<p class="helper">Searching…</p>';
   const found = [],
-    needle = query.toLowerCase();
+    needle = query.replace(/\s+/g, " ").toLowerCase();
   for (const book of bookOrder()) {
     if ((area === "ot" && !isSeptuagint(book)) || (area === "nt" && isSeptuagint(book)) || (area === "book" && book !== $("searchBook").value)) continue;
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -987,7 +794,7 @@ async function runSearch() {
     const chapters = window.BIBLE.t[book];
     for (let c = 0; c < chapters.length && found.length < 80; c++)
       for (let v = 1; v < chapters[c].length && found.length < 80; v++)
-        if (chapters[c][v]?.toLowerCase().includes(needle))
+        if (flatText(chapters[c][v]).toLowerCase().includes(needle))
           found.push({ book, ch: c + 1, v });
     if (found.length >= 80) break;
   }
@@ -996,7 +803,7 @@ async function runSearch() {
     found
       .map(
         (p) =>
-          `<button class="result" data-action="jump" data-key="${keyOf(p.book, p.ch, p.v)}"><strong>${esc(refLabel(p.book, p.ch, p.v))}</strong><p>${esc(verseText(p.book, p.ch, p.v))}</p></button>`,
+          `<button class="result" data-action="jump" data-key="${keyOf(p.book, p.ch, p.v)}"><strong>${esc(refLabel(p.book, p.ch, p.v))}</strong><p>${scriptureHtml(verseText(p.book, p.ch, p.v))}</p></button>`,
       )
       .join("");
 }
@@ -1016,7 +823,7 @@ function showVerse(book, ch, v) {
   const related = relatedPassagesHtml(book, ch, v);
   openDialogAs("note-sheet verse-sheet",
     refLabel(book, ch, v),
-    `<p class="verse-preview">${esc(verseText(book, ch, v))}</p>
+    `<p class="verse-preview">${scriptureHtml(verseText(book, ch, v))}</p>
     <div class="verse-actions" role="toolbar" aria-label="Verse actions">
       <button class="verse-action" id="bookmarkVerse" aria-pressed="${bookmarked(book, ch, v)}">${icon("bookmark")}<span>${bookmarked(book, ch, v) ? "Saved" : "Save"}</span></button>
       ${colors.map(([color, label]) => `<button class="verse-swatch hl-${color}" data-color="${color}" aria-label="Highlight ${label}" aria-pressed="${state.highlights[key] === color}"></button>`).join("")}
@@ -1085,7 +892,7 @@ function showVerse(book, ch, v) {
   };
   $("copyVerse").onclick = async () => {
     try {
-      await navigator.clipboard.writeText(verseText(book, ch, v) + "\n" + refLabel(book, ch, v));
+      await navigator.clipboard.writeText(flatText(verseText(book, ch, v)) + "\n" + refLabel(book, ch, v));
       notify("Verse copied");
     } catch {
       notify("Copy unavailable. Select the verse text to copy it.");
@@ -1140,14 +947,11 @@ function showSettings() {
       )
       .join(
         "",
-      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${typeof osbSettingsHtml === "function" ? osbSettingsHtml() : ""}<details class="import-file" ${osbPackState === "unlocked" ? "hidden" : ""}><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Text: <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">World English Bible</a></p>`,
+      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><h3 class="section-label">Orthodox Study Bible</h3>${osbSettingsHtml()}<h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides, articles &amp; book introductions ›</button><p class="helper">Text: Orthodox Study Bible. Old Testament: St. Athanasius Academy Septuagint. New Testament: New King James Version.</p>`,
   );
   bindReaderToolsSettings();
-  $("personalNotesFile").onchange = importPersonalNotes;
-  if (typeof wireOsbSettings === "function") wireOsbSettings();
+  wireOsbSettings();
   $("openStorage").onclick = () => showStorage();
-  $("openCloudSync").hidden = !cloudConfig();
-  $("openCloudSync").onclick = showCloudSync;
   const font = (delta) => {
     rememberScroll();
     state.font = Math.max(16, Math.min(28, state.font + delta));
@@ -1205,7 +1009,7 @@ function showEssay(id) {
   $("backSettings").onclick = back;
 }
 function handleAction(event) {
-  const button = event.target.closest("button");
+  const button = event.target.closest("button, sup.tn");
   if (!button) return;
   if (handleLibraryAction(button)) return;
   if (handleReaderToolAction(button)) return;
@@ -1215,15 +1019,16 @@ function handleAction(event) {
   if (button.dataset.jumpVerse) {
     closeDialog();
     let target = pane.querySelector(`[data-verse="${button.dataset.jumpVerse}"]`);
-    while (target?.previousElementSibling?.classList.contains("osb-heading")) target = target.previousElementSibling;
+    // A heading inside a verse is the target itself; otherwise start at the headings above the verse.
+    const inner = button.dataset.jumpLine && target?.querySelectorAll(".verse-lines > .vl, .verse-lines > .vp")[Number(button.dataset.jumpLine)]?.previousElementSibling;
+    if (inner?.classList.contains("osb-heading")) target = inner;
+    else while (/\bosb-(heading|parallel)\b/.test(target?.previousElementSibling?.className || "")) target = target.previousElementSibling;
     revealInPane(target);
     return;
   }
   if (button.dataset.hourJump) { closeDialog(); revealInPane(document.getElementById(button.dataset.hourJump)); return; }
   if (button.dataset.contextGuide !== undefined) { showStudyContext("guide", button.dataset.contextGuide, button.dataset.contextParent); return; }
   if (button.dataset.contextIntro) { showStudyContext("intro", button.dataset.contextIntro, button.dataset.contextParent); return; }
-  if (button.dataset.legacyKey) { showLegacySaved(button.dataset.legacyKey); return; }
-  if (button.dataset.studyBook) { showOriginalStudyNotes(button.dataset.studyBook); return; }
   if (button.dataset.prayer) {
     prayerBackSnapshot = captureSwipeView(pane);
     prayerListTop = pane.scrollTop;
@@ -1235,7 +1040,7 @@ function handleAction(event) {
     const p = parseKey(button.dataset.key);
     if (button.dataset.action === "verse") showVerse(p.book, p.ch, p.v);
     else if (button.dataset.action === "jump") visitPassage(p.book, p.ch, p.v);
-    else { const note=noteAt(p.book,p.ch,p.v); showStudyNote(note?.sourceKey || keyOf(p.book,p.ch,p.v),!!note?.sourceKey); }
+    else showStudyNote(keyOf(p.book, p.ch, p.v), true);
   } else if (button.dataset.book) showChapters(button.dataset.book);
   else if (button.dataset.chapter)
     goChapter(button.dataset.chapterBook, +button.dataset.chapter, button.dataset.verse ? +button.dataset.verse : null);
@@ -1254,6 +1059,10 @@ function handleAction(event) {
   else if (button.dataset.essay) showEssay(button.dataset.essay);
 }
 pane.addEventListener("click", handleAction);
+// The small letters of the translators' notes act as buttons for the keyboard too.
+pane.addEventListener("keydown", (event) => {
+  if ((event.key === "Enter" || event.key === " ") && event.target.matches?.("sup.tn")) { event.preventDefault(); event.target.click(); }
+});
 $("dialogBody").addEventListener("click", handleAction);
 pane.addEventListener(
   "scroll",
@@ -1392,11 +1201,10 @@ if (window.BIBLE?.t) {
   state.lastOpenDay = localDayKey();
   selectTab(state.tab);
   renderTab(state.tab);
-  await restorePersonalNotes();
+  await loadOsbStudy().catch(() => notify("The study notes could not be opened. Reload to try again."));
   await restoreLibrary();
   setupLibraryReader();
   document.querySelector(".app").inert = false;
-  initializeCloudSync();
   // Home Screen apps usually resume rather than relaunch: a new day still opens Today.
   const resumeDay = () => {
     if (document.hidden || typeof localDayKey !== "function") return;
@@ -1409,9 +1217,7 @@ if (window.BIBLE?.t) {
   };
   document.addEventListener("visibilitychange", resumeDay);
   window.addEventListener("pageshow", resumeDay);
-  if ("serviceWorker" in navigator)
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
   })().catch(() => { document.querySelector(".app").inert = false; notify("Could not restore saved data. Please reload before making changes."); });
 } else
   pane.innerHTML =
-    '<p class="empty">Scripture could not load. Reconnect and refresh to download the Bible.</p>';
+    '<p class="empty">Scripture could not load. Reload to try again.</p>';

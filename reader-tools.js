@@ -107,28 +107,19 @@ function showReadingPlan(choose=false,day,parent=captureSwipeView(dialog)) {
   openDialog('Reading plan',html);dialogBack=showSettings;dialogBackSnapshot=parent;$('toolsBack').onclick=showSettings;
 }
 function showStudyNote(key,source=false,parent=captureDialogReturn()) {
-  const note=source?personalSourceNotes[key]:window.STUDY?.notes?.[key];if(!note)return;
+  // A verse's study note, then its translators' notes (New Testament), each with the letter that marks it in the text.
+  const note=personalSourceNotes[key],letters=personalTextNotes[key];if(!note&&!letters)return;
   studyNoteParent=parent;
-  const p=parseKey(key),target=source?personalAlignment?.notes?.[key]:verifiedNoteTarget(key);
-  openDialogAs('note-sheet',target?`${refLabel(...Object.values(parseKey(target)))} · OSB note`:(/^[A-Z0-9]{3}:\d+:\d+$/.test(note.title||'')?`${refLabel(p.book,p.ch,p.v)} · OSB note`:note.title||'Study note'),`${parent?`<button class="text-button" id="noteBack">‹ ${esc(parent.title)}</button>`:''}<article class="footnote">${target&&target!==key?`<p class="helper">OSB numbering ${esc(key.split(':').slice(1).join(':'))}</p>`:target?'':`<p class="helper">OSB ${esc(key)}</p>`}<p class="note-body">${esc(note.body)}</p></article>`);
+  const p=parseKey(key);
+  openDialogAs('note-sheet',`${refLabel(p.book,p.ch,p.v)} · ${note?'OSB note':'Translators’ note'}`,`${parent?`<button class="text-button" id="noteBack">‹ ${esc(parent.title)}</button>`:''}<article class="footnote">${note?`<p class="note-body">${esc(note.body)}</p>`:''}${letters?`<div class="text-notes">${textNotesHtml(key)}</div>`:''}</article>`);
   dialog.classList.add('note-sheet');
   if(parent){dialogBack=parent.show;dialogBackSnapshot=parent.snapshot;$('noteBack').onclick=parent.show;}
-}
-function verifiedNoteTarget(key) {
-  const p=parseKey(key);
-  if(!isSeptuagint(p.book)&&validVerse(p.book,p.ch,p.v)) return key;
-  return null;
-}
-function verifiedReferenceTarget(key) {
-  const p=parseKey(key);
-  if(!isSeptuagint(p.book)&&validVerse(p.book,p.ch,p.v))return key;
-  return personalAlignment?.verses?.[key]||null;
 }
 function showPassagePreview(key,parentNote,source=false,parentVerse) {
   const p=parseKey(key);if(!validVerse(p.book,p.ch,p.v))return;
   const parent=dialog.open?captureSwipeView(dialog):null;
   const noteParent=studyNoteParent;
-  openDialogAs('note-sheet',refLabel(p.book,p.ch,p.v),`${parentNote||parentVerse?`<button class="text-button" id="previewBack">‹ ${parentNote?"Study note":"Verse"}</button>`:""}<blockquote>${esc(verseText(p.book,p.ch,p.v))}</blockquote><button class="text-button" data-action="jump" data-key="${key}">Read chapter ›</button>`);
+  openDialogAs('note-sheet',refLabel(p.book,p.ch,p.v),`${parentNote||parentVerse?`<button class="text-button" id="previewBack">‹ ${parentNote?"Study note":"Verse"}</button>`:""}<blockquote>${scriptureHtml(verseText(p.book,p.ch,p.v))}</blockquote><button class="text-button" data-action="jump" data-key="${key}">Read chapter ›</button>`);
   dialog.classList.add('note-sheet');
   if(parentNote||parentVerse){dialogBack=parentNote?()=>showStudyNote(parentNote,source,noteParent):()=>{const p=parseKey(parentVerse);showVerse(p.book,p.ch,p.v)};dialogBackSnapshot=parent;$('previewBack').onclick=dialogBack;}
 }
@@ -145,9 +136,15 @@ function searchToolsHtml() {
 function searchStudyContent(query,area) {
   const needle=query.toLocaleLowerCase(),found=[];
   const contains=text=>String(text||'').toLocaleLowerCase().includes(needle);
-  if(area==='notes')for(const [key,note]of Object.entries(Object.keys(personalSourceNotes).length?personalSourceNotes:window.STUDY.notes||{})){
-    if(contains(note.body)||contains(note.title)){found.push(`<button class="result" data-note-key="${esc(key)}" ${Object.keys(personalSourceNotes).length?'data-source-note="true"':''}><strong>${esc(note.title||key)}</strong><small>Original reference: ${esc(key)}</small><p>${esc(note.body.slice(0,180))}…</p></button>`);if(found.length===80)break;}
-  } else {
+  if(area==='notes')for(const [key,note]of Object.entries(personalSourceNotes)){
+    if(contains(note.body)){const p=parseKey(key),at=Math.max(0,note.body.toLocaleLowerCase().indexOf(needle)-60);found.push(`<button class="result" data-note-key="${esc(key)}" data-source-note="true"><strong>${esc(refLabel(p.book,p.ch,p.v))}</strong><p>${at?'…':''}${esc(note.body.slice(at,at+180))}${note.body.length>at+180?'…':''}</p></button>`);if(found.length===80)break;}
+  }
+  if(area==='notes')for(const [key,list]of Object.entries(personalTextNotes)){
+    if(found.length>=80)break;
+    const hit=list.find(([,text])=>contains(text));
+    if(hit&&!contains(personalSourceNotes[key]?.body)){const p=parseKey(key);found.push(`<button class="result" data-note-key="${esc(key)}" data-source-note="true"><strong>${esc(refLabel(p.book,p.ch,p.v))}</strong><p>${esc(hit[1].slice(0,180))}${hit[1].length>180?'…':''}</p></button>`);}
+  }
+  if(area!=='notes') {
     const entries=[...personalGuides.map((g,i)=>({article:g,attr:`data-context-guide="${i}"`})),...Object.entries(personalIntroductions).map(([id,g])=>({article:g,attr:`data-context-intro="${id}"`}))];
     for(const {article,attr}of entries)if(contains(article.title)||article.blocks.some(b=>contains(b.text)||b.rows?.some(row=>row.some(contains))))found.push(`<button class="result" ${attr}><strong>${esc(article.title)}</strong></button>`);
     for(const [id,e]of Object.entries(window.STUDY.essays||{}))if(contains(e.title)||contains(e.lead)||e.sections.some(s=>contains(s.h)||contains(s.p)))found.push(`<button class="result" data-essay="${id}"><strong>${esc(e.title)}</strong></button>`);
@@ -164,7 +161,6 @@ function handleReaderToolAction(button) {
   else if(d.completePlan!==undefined){const day=+d.completePlan,c=state.readingPlan.completed;state.readingPlan.completed=c.includes(day)?c.filter(n=>n!==day):[...c,day];persist();showReadingPlan(false,day,dialogBackSnapshot);}
   else if(d.noteKey)showStudyNote(d.noteKey,!!d.sourceNote);
   else if(d.sourceBook)showSourceNotes(d.sourceBook);
-  else if(d.reviewNote)showNoteLinkReview(d.reviewNote);
   else if(d.previewRef)showPassagePreview(d.previewRef,d.previewNote,!!d.previewSource,d.previewOrigin);
   else return false;
   return true;

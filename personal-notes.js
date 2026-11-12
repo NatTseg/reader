@@ -1,8 +1,7 @@
-// Personal notes stay in this browser's IndexedDB, separate from app cache updates.
+// Study material from the encrypted OSB pack: notes on their verses, introductions, guides, and study articles.
 const builtInStudy = {notes: window.STUDY.notes, preambles: {...window.STUDY.preambles}};
 let personalNotesCount = 0;
-let personalNotesRevision = 0;
-let personalGuides = [], personalIntroductions = {}, personalHeadings = {};
+let personalGuides = [], personalIntroductions = {}, personalTextNotes = {};
 let personalAlignment = null;
 function validatePersonalNotes(data) {
   if (!data || typeof data.notes !== "object" || !data.notes || Array.isArray(data.notes))
@@ -10,7 +9,7 @@ function validatePersonalNotes(data) {
   const notes = {}, preambles = {};
   for (const [key, note] of Object.entries(data.notes)) {
     const match = key.match(/^([A-Z0-9]{3}):(\d+):(\d+)$/);
-    if (!match || ![...window.BIBLE.books, ...(window.LEGACY_WEB?.books || [])].some((b) => b.id === match[1]) ||
+    if (!match || !window.BIBLE.books.some((b) => b.id === match[1]) ||
         +match[2] < 1 || +match[3] < 1 || !note || typeof note.body !== "string")
       throw new Error("The notes file contains an invalid verse reference or note.");
     notes[key] = {
@@ -20,9 +19,8 @@ function validatePersonalNotes(data) {
       see: Array.isArray(note.see) ? note.see.filter((v) => typeof v === "string" && /^[A-Z0-9]{3}:\d+:\d+$/.test(v)) : [],
     };
   }
-  if (!Object.keys(notes).length) throw new Error("This file has no study notes.");
   for (const [key, intro] of Object.entries(data.preambles || {})) {
-    if (![...window.BIBLE.books, ...(window.LEGACY_WEB?.books || [])].some((b) => b.id === key) || !intro || typeof intro !== "object") continue;
+    if (!window.BIBLE.books.some((b) => b.id === key) || !intro || typeof intro !== "object") continue;
     preambles[key] = Object.fromEntries(
       ["author", "date", "theme", "body", "outline"].map((name) => [name, typeof intro[name] === "string" ? intro[name] : ""]),
     );
@@ -39,87 +37,33 @@ function validatePersonalNotes(data) {
       sourceVerse:typeof note.sourceVerse === "string" ? note.sourceVerse : "", see:Array.isArray(note.see) ? note.see.filter(k => typeof k === "string" && /^[A-Z0-9]{3}:\d+:\d+$/.test(k)) : []};
   }
   const alignment = typeof validateNoteAlignment === "function" ? validateNoteAlignment(data.alignment,sourceNotes) : null;
-  // OSB section headings, keyed by the verse they precede in this edition.
-  const headings = {};
-  for (const [key, list] of Object.entries(data.headings || {})) {
+  if (!Object.keys(sourceNotes).length || !alignment) throw new Error("The study pack has no notes.");
+  // The translators' footnotes of the New Testament: [[letter, text], ...] on the verse that carries the letters.
+  const textNotes = {};
+  for (const [key, list] of Object.entries(data.textNotes || {})) {
     const m = key.match(/^([A-Z0-9]{3}):(\d+):(\d+)$/);
-    if (!m || !Array.isArray(list) || !validVerse(m[1], +m[2], +m[3])) continue;
-    const texts = list.filter(text => typeof text === "string" && text.trim() && text.length <= 200).slice(0, 4);
-    if (texts.length) headings[key] = texts;
+    if (!m || !validVerse(m[1], +m[2], +m[3]) || !Array.isArray(list) || !list.every((n) => Array.isArray(n) && /^[a-z]{1,2}$/.test(n[0]) && typeof n[1] === "string"))
+      throw new Error("The study pack contains an invalid translators' note.");
+    textNotes[key] = list.map(([letter, text]) => [letter, text]);
   }
-  return { notes, preambles, guides, introductions, sourceNotes, alignment, headings };
-}
-function personalNotesStore(mode, value) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("orthobible-personal", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("study");
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const db = request.result;
-      const tx = db.transaction("study", mode);
-      const store = tx.objectStore("study");
-      const operation = mode === "readwrite" ? store.put(value, "notes") : store.get("notes");
-      tx.oncomplete = () => { db.close(); resolve(operation.result); };
-      tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error("Could not store notes.")); };
-    };
-  });
+  return { notes, preambles, guides, introductions, sourceNotes, alignment, textNotes };
 }
 function applyPersonalNotes(data) {
   const imported = !!data;
   data = data || {notes: builtInStudy.notes, preambles: {}};
   window.STUDY.notes = data.notes;
   window.STUDY.preambles = { ...builtInStudy.preambles, ...data.preambles };
-  personalNotesCount = imported ? Object.keys(data.notes).length : 0;
+  personalNotesCount = imported ? Object.keys(data.sourceNotes || {}).length : 0;
   if (typeof applyNoteAlignment === "function") applyNoteAlignment(imported ? data : null);
   personalGuides = data.guides || [];
   personalIntroductions = data.introductions || {};
-  personalHeadings = data.headings || {};
+  personalTextNotes = data.textNotes || {};
   const top = pane.scrollTop;
   if (state.tab === "bible") renderChapter(state.scroll);
   else if (state.tab === "wisdom") renderWisdom();
   else if (state.tab === "library") renderLibrary();
   pane.scrollTop = top;
 }
-async function restorePersonalNotes() {
-  const revision = personalNotesRevision;
-  try {
-    const data = await personalNotesStore("readonly");
-    let fresh = null;
-    // A file imported by hand (no packId) takes precedence over the encrypted copy.
-    if (typeof loadOsbPack === "function" && (!data || data.packId)) {
-      try { fresh = await loadOsbPack(data); } catch { /* keep the stored copy when the pack cannot be opened */ }
-    }
-    if (revision !== personalNotesRevision) return;
-    if (fresh) applyPersonalNotes(fresh);
-    else if (data) applyPersonalNotes(validatePersonalNotes(data));
-  } catch {
-    // Built-in notes remain usable when IndexedDB is unavailable.
-  }
-}
-async function importPersonalNotes(event) {
-  const input = event.target, file = input.files?.[0];
-  if (!file) return;
-  if (typeof persistenceBusy !== "undefined" && persistenceBusy) { notify("Wait for the restore to finish before importing notes."); return; }
-  input.disabled = true;
-  try {
-    if (file.size > 20 * 1024 * 1024) throw new Error("Choose a study-notes file smaller than 20 MB.");
-    const data = validatePersonalNotes(JSON.parse(await file.text()));
-    await personalNotesStore("readwrite", data);
-    personalNotesRevision++;
-    applyPersonalNotes(data);
-    const status = document.getElementById("personalNotesStatus");
-    if (status) showSettings();
-    navigator.storage?.persist?.().catch(() => {});
-    notify("Study notes saved for offline reading.");
-    if (typeof queueCloudSync === "function") queueCloudSync();
-  } catch (error) {
-    notify(error instanceof SyntaxError ? "Choose a valid study-notes JSON file." : error.message || "Could not save notes. Check available storage and try again.");
-  } finally {
-    input.disabled = false;
-    input.value = "";
-  }
-}
-
 // Import structured text only: source markup never becomes executable HTML.
 function validateStudyArticle(article) {
   if (!article || typeof article.title !== "string" || !Array.isArray(article.blocks) || !article.blocks.length)
@@ -131,32 +75,38 @@ function validateStudyArticle(article) {
       throw new Error("The study file contains an invalid text section.");
     return { type: block.type, text: block.text };
   });
-  return { title: article.title, blocks };
+  // group: "Study articles" marks the OSB's in-text articles; after: the verse each one follows in the text.
+  return { title: article.title, blocks, ...(typeof article.group === "string" ? { group: article.group } : {}),
+    ...(typeof article.after === "string" && /^[A-Z0-9]{3}:\d+:\d+$/.test(article.after) ? { after: article.after } : {}) };
 }
 function studyArticleHtml(article) {
   return article.blocks.map(block => block.type === "table"
     ? `<div class="context-table"><table>${block.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</table></div>`
     : block.type === "heading" ? `<h3>${esc(block.text)}</h3>` : `<p>${esc(block.text)}</p>`).join("");
 }
-function personalContextStatus() {
-  const linked = Object.keys(personalAlignment?.notes || {}).length;
-  const source = Object.keys(personalSourceNotes).length;
-  return personalNotesCount ? `${personalNotesCount.toLocaleString()} earlier notes, ${Object.keys(personalIntroductions).length} book introductions, and ${personalGuides.length} guides stored on this device.${source ? ` ${linked.toLocaleString()} of ${source.toLocaleString()} source notes have verse links; all remain available in the notes browser.` : ''}`
-    : "Your Orthodox Study Bible notes are not open on this device yet.";
+function contextListHtml(items) {
+  return `<div class="context-list">${items.map(([attr, title]) => `<button class="topic" ${attr} data-context-parent="library"><span>${esc(title)}</span>${icon("right")}</button>`).join("")}</div>`;
 }
 function showContextLibrary(settingsSnapshot) {
   // From Library this opens on its own; from Reading settings it keeps a way back.
   const fromSettings = !!settingsSnapshot || dialog.open;
   const parentView = settingsSnapshot || (fromSettings ? captureSwipeView(dialog) : null);
-  openDialog("Orthodox Study Bible", `${fromSettings ? '<button class="text-button" id="contextBack">‹ Reading settings</button>' : ""}<h3 class="section-label">Reading guides</h3><div class="context-list">${personalGuides.map((g, i) => `<button class="topic" data-context-guide="${i}" data-context-parent="library"><span>${esc(g.title)}</span>${icon("right")}</button>`).join("") || '<p class="helper">Import the updated study file to add the OSB guides.</p>'}</div><h3 class="section-label">Book introductions</h3><div class="context-list">${window.BIBLE.books.filter(b => personalIntroductions[b.id]).map(b => `<button class="topic" data-context-intro="${b.id}" data-context-parent="library"><span>${esc(displayName(b.id))}</span>${icon("right")}</button>`).join("")}</div>`);
+  const guides = personalGuides.map((g, i) => [i, g]);
+  const list = (group) => contextListHtml(guides.filter(([, g]) => (g.group || "") === group).map(([i, g]) => [`data-context-guide="${i}"`, g.title]));
+  openDialog("Orthodox Study Bible", `${fromSettings ? '<button class="text-button" id="contextBack">‹ Reading settings</button>' : ""}<h3 class="section-label">Reading guides</h3>${list("")}<h3 class="section-label">Study articles</h3>${list("Study articles")}<h3 class="section-label">Book introductions</h3>${contextListHtml(window.BIBLE.books.filter(b => personalIntroductions[b.id]).map(b => [`data-context-intro="${b.id}"`, displayName(b.id)]))}`);
   if (fromSettings) { dialogBack = showSettings; dialogBackSnapshot = parentView; $("contextBack").onclick = showSettings; }
+}
+// The OSB's study articles that sit in this chapter of the printed text.
+function chapterArticles(book, chapter) {
+  const prefix = `${book}:${chapter}:`;
+  return personalGuides.map((g, i) => [i, g]).filter(([, g]) => g.after?.startsWith(prefix));
 }
 function showStudyContext(kind, id, parent) {
   const article = kind === "guide" ? personalGuides[Number(id)] : personalIntroductions[id];
   if (!article) return;
   const origin = captureDialogReturn();
   const back = origin?.show || closeDialog;
-  openDialog(article.title, `<article class="essay osb-context"><button class="text-button" id="contextBack">‹ ${esc(origin?.title || (state.tab === "library" ? "Library" : "Back to reading"))}</button><p class="eyebrow">Orthodox Study Bible · personal copy</p>${studyArticleHtml(article)}</article>`);
+  openDialog(article.title, `<article class="essay osb-context"><button class="text-button" id="contextBack">‹ ${esc(origin?.title || (state.tab === "library" ? "Library" : "Back to reading"))}</button><p class="eyebrow">Orthodox Study Bible</p>${studyArticleHtml(article)}</article>`);
   dialogBack = origin ? back : null;
   dialogBackSnapshot = origin?.snapshot || null;
   $("contextBack").onclick = back;

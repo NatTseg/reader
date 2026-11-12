@@ -1,4 +1,4 @@
-const CACHE = "reader-v54";
+const CACHE = "reader-osb-v1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,20 +6,19 @@ const ASSETS = [
   "./swipe.js",
   "./personal-notes.js",
   "./persistence.js",
-  "./cloud-config.js",
-  "./cloud-sync.js",
   "./reader-tools.js",
   "./today.js",
   "./osb-pack.js",
-  "./osb-data.enc.json",
+  "./boot.js",
+  "./edition.json",
+  "./bible.enc",
+  "./study.enc",
   "./katameros-data.js",
   "./library.js", "./library-formats.js", "./library-tools.js", "./library-backup.js", "./vendor/fflate/fflate.js", "./vendor/fflate/LICENSE",
   "./note-alignment.js",
   "./prayers-data.js",
   "./agpeya-data.js",
   "./styles.css",
-  "./bible-data.js",
-  "./legacy-web-data.js",
   "./edition.js",
   "./study-data.js",
   "./wisdom-data.js",
@@ -242,7 +241,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => /^(?:reader|orthodox-bible)-v\d+$/.test(key) && key !== CACHE)
+            .filter((key) => /^reader-osb-v\d+$/.test(key) && key !== CACHE)
             .map((key) => caches.delete(key)),
         ),
       )

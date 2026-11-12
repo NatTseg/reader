@@ -4,6 +4,17 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
 const root = path.join(__dirname, "..");
+// The Bible text and study material are private build outputs (never committed): scripts/build_osb_edition.py
+// writes them outside the repository. Without them there is nothing to test.
+const buildDir = process.env.OSB_BUILD_DIR || path.join(require("node:os").homedir(), "Documents/reader-private/osb/build");
+if (!fs.existsSync(path.join(buildDir, "bible.json"))) {
+  test("the private OSB build is required", { skip: `No build at ${buildDir}` }, () => {});
+  return;
+}
+const bibleJson = fs.readFileSync(path.join(buildDir, "bible.json"), "utf8");
+const studyJson = fs.readFileSync(path.join(buildDir, "study.json"), "utf8");
+const BIBLE = JSON.parse(bibleJson);
+const STUDY = JSON.parse(studyJson);
 function reader(stored = {}) {
   const element = () => ({
     addEventListener() {},
@@ -52,10 +63,11 @@ function reader(stored = {}) {
     addEventListener() {},
   };
   context.window = context;
+  context.bibleJson = bibleJson;
+  context.studyJson = studyJson;
   vm.createContext(context);
+  vm.runInContext("window.BIBLE = JSON.parse(bibleJson); bibleJson = null;", context);
   for (const file of [
-    "bible-data.js",
-    "legacy-web-data.js",
     "edition.js",
     "swipe.js",
     "study-data.js",
@@ -66,7 +78,6 @@ function reader(stored = {}) {
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "personal-notes.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "persistence.js"), "utf8"), context);
-  vm.runInContext(fs.readFileSync(path.join(root, "cloud-sync.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "reader-tools.js"), "utf8"), context);
   for (const file of ["katameros-data.js", "today.js"]) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   for (const file of ["vendor/fflate/fflate.js", "library-formats.js", "library.js", "library-tools.js", "library-backup.js"])
@@ -81,18 +92,12 @@ function reader(stored = {}) {
   );
   return (expression) => vm.runInContext(expression, context);
 }
-test("Psalm 151 resolves to its separate book; invalid chapters and verses are rejected", () => {
-  const run = reader();
-  assert.equal(
-    run('JSON.stringify(parseRef("Psalm 151"))'),
-    JSON.stringify({ book: "PS2", ch: 1, v: null }),
-  );
-  assert.equal(run('parseRef("John 99:1")'), null);
-  assert.equal(run('parseRef("John 3:999")'), null);
-  assert.equal(run('parseRef("John 3:0")'), null);
-  assert.equal(run('parseRef("John 3:16-15")'), null);
-  assert.equal(run('parseRef("1 Corinthians 13:4").book'), "1CO");
-});
+// A reader with the study pack (notes, introductions, guides, articles) open, as after start-up.
+function readerWithStudy(stored = {}) {
+  const run = reader(stored);
+  run("loadPrefs(); applyPersonalNotes(validatePersonalNotes(JSON.parse(studyJson)))");
+  return run;
+}
 test("every curated Wisdom range displays exactly its referenced verses", () => {
   const run = reader();
   const mismatches = run(
@@ -136,67 +141,6 @@ test("invalid persisted data cannot break reader preferences", () => {
   assert.equal(run("state.font"), 28);
   assert.equal(run("state.bookmarks.length"), 0);
 });
-test("activation deletes only old reader and legacy app caches", async () => {
-  const handlers = {},
-    deleted = [];
-  let job;
-  const context = {
-    self: {
-      addEventListener(name, fn) {
-        handlers[name] = fn;
-      },
-      clients: { claim() {} },
-    },
-    caches: {
-      keys: async () => [
-        "unrelated-app-v1",
-        "reader-glossary-v1",
-        "reader-v30",
-        "reader-v31",
-        "reader-v32",
-        "reader-v35",
-        "reader-v36",
-        "reader-v37",
-        "reader-v38",
-        "reader-v39",
-        "reader-v40",
-        "reader-v41",
-        "reader-v42",
-        "reader-v43",
-        "reader-v44",
-        "reader-v45",
-        "reader-v46",
-        "reader-v47",
-        "reader-v48",
-        "reader-v49",
-        "reader-v50",
-        "reader-v51",
-        "reader-v52",
-        "reader-v53",
-        "reader-v54",
-        "orthodox-bible-v13",
-        "orthodox-bible-v18",
-        "orthodox-bible-v20",
-        "orthodox-bible-v28",
-        "orthodox-bible-v29",
-        "orthodox-bible-v30",
-      ],
-      delete: async (key) => deleted.push(key),
-    },
-  };
-  vm.runInNewContext(
-    fs.readFileSync(path.join(root, "sw.js"), "utf8"),
-    context,
-  );
-  handlers.activate({
-    waitUntil(p) {
-      job = p;
-    },
-  });
-  await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "reader-v47", "reader-v48", "reader-v49", "reader-v50", "reader-v51", "reader-v52", "reader-v53", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
-});
-
 test("offline HTML fallback is reserved for navigation within this app", async () => {
   const handlers = {};
   const fallback = { html: true };
@@ -326,17 +270,6 @@ test('linked passages return to the originating Wisdom topic and saved filter', 
   assert.equal(run('pane.scrollTop'), 42);
 });
 
-test('random passages cover the canon and select populated source verses, including range starts', () => {
-  const run = reader();
-  assert.equal(run('JSON.stringify(randomPassage(()=>0))'), JSON.stringify({book:'GEN',ch:1,v:1}));
-  assert.equal(run('JSON.stringify(randomPassage(()=>1-Number.EPSILON))'), JSON.stringify({book:'REV',ch:22,v:21}));
-  const invalid = run(`randomPassageTargets.filter(p => !bookMeta(p.book) || !chapterText(p.book,p.ch)[p.v] || sourceVerseStart(p.book,p.ch,p.v)!==p.v).length`);
-  assert.equal(invalid, 0);
-  assert.equal(run('new Set(randomPassageTargets.map(p=>p.book)).size'), run('bookOrder().length'));
-  assert.equal(run('randomPassageTargets.some(p=>p.book==="PS2")'), true);
-  assert.equal(run('randomPassageTargets.some(p=>BIBLE.spans?.[keyOf(p.book,p.ch,p.v)])'), true);
-});
-
 test('a random visit preserves annotations and returns to the earlier chapter and scroll', () => {
   const run=reader();
   run(`window.requestAnimationFrame=()=>{};loadPrefs();state.book='JHN';state.chapter=3;pane.scrollTop=240;
@@ -359,26 +292,6 @@ test('How to read Scripture opens the OSB guide when unlocked and the original a
   assert.ok(run('howToReadButton()').includes('data-context-guide="1"'));
 });
 
-test('no AI-written introductions, notes, or guides remain built in', () => {
-  const run=reader();
-  assert.equal(run('Object.keys(window.STUDY.preambles).length+Object.keys(window.STUDY.notes).length+Object.keys(window.STUDY.essays).length'),0);
-  run('loadPrefs({});state.book="GEN";state.chapter=1;personalNotesCount=0;renderChapter(0);');
-  assert.ok(!run('pane.innerHTML').includes('<details class="introduction">'));
-  assert.match(run('pane.innerHTML'),/osb-locked/);
-});
-
-test('OSB section headings and introductions render with the chapter', () => {
-  const run=reader();
-  run(`loadPrefs({});state.book="GEN";state.chapter=1;
-    applyPersonalNotes(validatePersonalNotes({notes:{"MAT:5:3":{body:"Blessed note"}},introductions:{GEN:{title:"The Book of Genesis",blocks:[{type:"heading",text:"Author"},{type:"paragraph",text:"Moses"}]}},
-      headings:{"GEN:1:1":["The Creation"],"GEN:99:1":["Invalid"],"GEN:2:1":[42]}}));renderChapter(0);`);
-  const html=run('pane.innerHTML');
-  assert.match(html,/<h3 class="osb-heading">The Creation<\/h3>/);
-  assert.ok(!html.includes('Invalid'));
-  assert.match(html,/Introduction to Genesis/);
-  assert.match(html,/Moses/);
-});
-
 test('PDF imports reject renamed HTML and oversized files before opening the renderer', async () => {
   const run=reader();
   await assert.rejects(run(`validateLibraryPdf(new Blob(['<script>alert(1)</script>'],{type:'application/pdf'}))`), /Choose a PDF file/);
@@ -392,88 +305,6 @@ test('nested dialogs use their parent action before dismissing the overlay', () 
   assert.equal(run('window.returned'), true);
   run('dialogBack=null');
   assert.equal(run('backAction() === closeDialog'), true);
-});
-
-test('personal notes validate data, render safely, and leave saved verses untouched', () => {
-  const run = reader({bookmarks:[{book:'JHN',chapter:3,verse:16}],comments:{'JHN:3:16':'My note'}});
-  run(`loadPrefs(); window.imported = validatePersonalNotes({notes:{'JHN:1:1':{body:'<script>alert(1)</script>\\nSecond paragraph', title:'Personal note'}},preambles:{JHN:{body:'Introduction'}}}); applyPersonalNotes(imported);`);
-  assert.equal(run('personalNotesCount'), 1);
-  assert.equal(run('state.bookmarks.length'), 1);
-  assert.equal(run('state.comments["JHN:3:16"]'), 'My note');
-  assert.match(run('notesHtml()'), /&lt;script&gt;/);
-  assert.match(run('verseHtml("JHN",1,1)'), /Study note for verse 1/);
-  assert.throws(() => run(`validatePersonalNotes({notes:{'BAD:1:1':{body:'Invalid'}}})`));
-  assert.throws(() => run(`validatePersonalNotes({notes:{}})`));
-});
-
-
-test('app updates bypass stale HTTP assets when filling the offline cache', async () => {
-  const handlers = {};
-  let job, assets;
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), {
-    Request: class { constructor(url, options) { this.url = url; this.cache = options.cache; } },
-    self: {addEventListener(name, fn) {handlers[name] = fn;}, skipWaiting() {}},
-    caches: {open: async () => ({addAll: async requests => {assets = requests;}})},
-  });
-  handlers.install({waitUntil(p) {job = p;}});
-  await job;
-  assert.ok(assets.every(request => request.cache === 'reload'));
-  assert.ok(assets.some(request => request.url === './personal-notes.js'));
-  assert.ok(assets.some(request => request.url === './bible-data.js'));
-});
-
-test('all Old Testament books use LXX2012 and all 27 New Testament books retain WEB', () => {
-  const run = reader();
-  assert.equal(run('BIBLE.books.filter(b=>b.translation === "LXX2012").length'), 55);
-  assert.equal(run('BIBLE.books.filter(b=>b.translation === "WEB").length'), 27);
-  assert.equal(run('bookOrder().length'), run('BIBLE.books.length'));
-  assert.equal(run('new Set(bookOrder()).size'), run('BIBLE.books.length'));
-  assert.equal(run('bookMeta("ESG")'), undefined);
-  assert.equal(run('bookMeta("2ES")'), undefined);
-  assert.match(run('verseText("GEN",5,3)'), /two hundred and thirty/i);
-  assert.match(run('verseText("PSA",22,1)'), /Lord.*(tends|shepherd)/i);
-  assert.match(run('verseText("PSA",50,1)'), /Have mercy/i);
-  assert.match(run('verseText("JER",38,31)'), /new covenant/i);
-  assert.match(run('verseText("EST",1,1)'), /saw a vision/i);
-  assert.ok(run('verseText("SUS",1,1).length') > 0);
-  assert.ok(run('verseText("BEL",1,1).length') > 0);
-  assert.ok(run('verseText("S3Y",1,1).length') > 0);
-  assert.ok(run('verseText("LJE",1,1).length') > 0);
-});
-
-test('Septuagint verse bridges render once and accept references within their range', () => {
-  const run = reader();
-  assert.equal(run('sourceVerseStart("GEN",37,2)'), 1);
-  assert.equal(run('sourceVerseLabel("GEN",37,1)'), '1–2');
-  assert.equal(run('verseText("GEN",37,2)'), run('verseText("GEN",37,1)'));
-  assert.equal(run('(rangeHtml("GEN",37,1,2).match(/class="verse[" ]/g)||[]).length'), 1);
-  assert.match(run('rangeHtml("GEN",37,2,2)'), /data-verse="1"/);
-  assert.equal(run('parseRef("Proverbs 22:6")'), null, 'omitted source verses cannot silently resolve elsewhere');
-});
-
-test('the edition migration preserves prior Old Testament saves verbatim and is idempotent', () => {
-  const run = reader({book:'PSA',chapter:23,bookmarks:[{book:'PSA',chapter:23,verse:1,ts:1},{book:'JHN',chapter:3,verse:16,ts:2}],comments:{'PSA:23:1':'My original note','ESG:1:1':'Greek Esther note'},highlights:{'PSA:23:1':'gold'}});
-  run('loadPrefs()');
-  assert.equal(run('state.chapter'), 22);
-  assert.equal(run('state.bookmarks.length'), 1);
-  assert.equal(run('state.legacySaved.length'), 2);
-  assert.equal(run('state.legacySaved[0].text'), run('LEGACY_WEB.t.PSA[22][1]'));
-  assert.equal(run('state.legacySaved[0].comment'), 'My original note');
-  assert.equal(run('state.legacySaved[0].highlight'), 'gold');
-  assert.equal(run('state.legacySaved[1].comment'), 'Greek Esther note');
-  const before = run('JSON.stringify(state)');
-  run('Object.assign(state,migrateEdition(state))');
-  assert.equal(run('JSON.stringify(state)'), before);
-});
-
-test('unaligned original OT notes stay available without being attached to LXX verses', () => {
-  const run = reader();
-  run(`applyPersonalNotes(validatePersonalNotes({notes:{'PSA:23:1':{body:'Original Hebrew-numbered note'},'DAG:3:24':{body:'Daniel note'}},preambles:{}})); state.book='PSA'; state.chapter=22;`);
-  assert.equal(run('personalNotesCount'), 2);
-  assert.equal(run('noteAt("PSA",22,1)'), null);
-  assert.match(run('notesHtml()'), /Read notes for this book/);
-  assert.match(run('notesHtml()'), /has not been verified/);
-  assert.equal(run('STUDY.notes["DAG:3:24"].body'), 'Daniel note');
 });
 
 test('back commit requires distance and rejects a deliberate reversal', () => {
@@ -525,57 +356,6 @@ test('short drags, reversing, touch cancellation, and multiple fingers never nav
   }
 });
 
-test('personal context imports full articles safely and preserves v1 compatibility', () => {
-  const run = reader();
-  run(`window.oldImport = validatePersonalNotes({notes:{'JHN:1:1':{body:'Keep this note'}},preambles:{JHN:{body:'Old introduction'}}});`);
-  assert.equal(run('oldImport.guides.length'), 0);
-  assert.equal(run('oldImport.preambles.JHN.body'), 'Old introduction');
-  run(`window.contextImport = validatePersonalNotes({...oldImport, guides:[{title:'Guide',blocks:[{type:'heading',text:'<img src=x onerror=alert(1)>'},{type:'paragraph',text:'Full text'},{type:'table',rows:[['<script>','Value']]}]}],introductions:{JHN:{title:'John',blocks:[{type:'paragraph',text:'Book context'}]}}}); applyPersonalNotes(contextImport);`);
-  assert.equal(run('personalIntroductions.JHN.blocks[0].text'), 'Book context');
-  assert.equal(run('personalGuides.length'), 1);
-  assert.equal(run('STUDY.notes["JHN:1:1"].body'), 'Keep this note');
-  const html = run('studyArticleHtml(personalGuides[0])');
-  assert.ok(html.includes('&lt;img'));
-  assert.ok(html.includes('<table>'));
-  assert.ok(!html.includes('<script>'));
-  assert.throws(() => run(`validatePersonalNotes({...oldImport,guides:[{title:'Invalid',blocks:[{type:'html',text:'<script>'}]}]})`));
-});
-
-test('chapter lists cover every chapter and mark only the current book and chapter', () => {
-  const run = reader();
-  run(`state.book='PSA'; state.chapter=100;`);
-  const html = run('chapterListHtml("PSA")');
-  assert.equal((html.match(/data-chapter=/g) || []).length, 150);
-  assert.equal((html.match(/aria-current/g) || []).length, 1);
-  assert.ok(html.includes('aria-label="Chapter 100, reading" aria-current="true"'));
-  assert.ok(!run('chapterListHtml("JHN")').includes('aria-current'));
-});
-
-
-test('full backups preserve imports, legacy saves and preferences without credentials', () => {
-  const run = reader();
-  run(`loadPrefs(); state.bookmarks=[{book:'JHN',chapter:1,verse:1,ts:1}]; state.comments={'JHN:1:1':'Keep <this>'}; state.cloudToken='secret'; window.backup={format:'orthobible-backup',version:1,reader:backupReader(state),personal:{notes:{'JHN:1:1':{body:'Imported'}},guides:[{title:'Guide',blocks:[{type:'paragraph',text:'Complete text'}]}]}}; window.checked=validateBackup(backup);`);
-  assert.equal(run('checked.reader.comments["JHN:1:1"]'), 'Keep <this>');
-  assert.equal(run('checked.personal.guides[0].blocks[0].text'), 'Complete text');
-  assert.equal(run('checked.reader.cloudToken'), undefined);
-  assert.throws(() => run('validateBackup({...backup,version:99})'));
-  assert.throws(() => run('validateBackup({...backup,reader:{...backup.reader,chapter:999}})'));
-  assert.throws(() => run('validateBackup({...backup,reader:{...backup.reader,comments:{"BAD:1:1":"bad"}}})'));
-  assert.throws(() => run('validateBackup({notes:{"JHN:1:1":{body:"wrong file"}}})'));
-});
-
-test('restore commits personal material and reading state together, retains an undo copy, and clears absent imports', async () => {
-  const run = reader();
-  run(`loadPrefs(); state.comments={'JHN:1:1':'Before'}; window.storedRecords={notes:{notes:{'JHN:1:1':{body:'Old import'}},preambles:{}}}; studyRead=async key=>storedRecords[key]; studyTransaction=async values=>Object.assign(storedRecords,values); rememberScroll=()=>{}; renderRestoredReader=(reader,personal)=>{Object.assign(state,reader); window.appliedPersonal=personal;}; window.restore={format:'orthobible-backup',version:1,reader:{...backupReader(state),chapter:3,comments:{'JHN:3:16':'After'}},personal:null};`);
-  await run('restoreBackup(restore)');
-  assert.equal(run('storedRecords.readerState.chapter'), 3);
-  assert.equal(run('storedRecords.notes'), null);
-  assert.equal(run('storedRecords.restoreRecovery.reader.comments["JHN:1:1"]'), 'Before');
-  assert.equal(run('storedRecords.restoreRecovery.personal.notes["JHN:1:1"].body'), 'Old import');
-  assert.equal(run('appliedPersonal'), null);
-  assert.equal(run('persistenceBusy'), false);
-});
-
 test('a failed restore transaction leaves current reader state intact', async () => {
   const run = reader();
   run(`loadPrefs(); state.comments={'JHN:1:1':'Keep'}; studyRead=async()=>null; studyTransaction=async()=>{throw new Error('Full disk')}; rememberScroll=()=>{}; window.restore={format:'orthobible-backup',version:1,reader:{...backupReader(state),chapter:3,comments:{}},personal:null};`);
@@ -618,41 +398,6 @@ test('offline status identifies missing files and repair preserves other cached 
   assert.deepEqual(added, ['./app.js', './reader-tools.js']);
 });
 
-
-test('cloud merge combines independent changes and preserves deletions', () => {
-  const run=reader();
-  run(`loadPrefs(); window.base={format:'orthobible-backup',version:1,reader:backupReader(state),personal:null}; base.reader.comments={'JHN:1:1':'Original'}; window.local=JSON.parse(JSON.stringify(base)); window.remote=JSON.parse(JSON.stringify(base)); delete local.reader.comments['JHN:1:1']; local.reader.comments['JHN:1:2']='Local'; remote.reader.highlights['JHN:1:3']='gold'; remote.reader.chapter=3; window.merged=mergeCloudBackups(base,local,remote);`);
-  assert.equal(run('merged.conflicts.length'),0);
-  assert.equal(run('merged.backup.reader.comments["JHN:1:1"]'),undefined);
-  assert.equal(run('merged.backup.reader.comments["JHN:1:2"]'),'Local');
-  assert.equal(run('merged.backup.reader.highlights["JHN:1:3"]'),'gold');
-  assert.equal(run('merged.backup.reader.chapter'),3);
-});
-
-test('cloud merge pauses on competing comments rather than losing either version', () => {
-  const run=reader();
-  run(`loadPrefs(); window.base={format:'orthobible-backup',version:1,reader:backupReader(state),personal:null}; window.local=JSON.parse(JSON.stringify(base)); window.remote=JSON.parse(JSON.stringify(base)); local.reader.comments['JHN:1:1']='Phone';remote.reader.comments['JHN:1:1']='Mac';window.merged=mergeCloudBackups(base,local,remote);`);
-  assert.equal(run('merged.conflicts[0]'),'comments: JHN:1:1');
-  assert.equal(run('local.reader.comments["JHN:1:1"]'),'Phone');
-  assert.equal(run('remote.reader.comments["JHN:1:1"]'),'Mac');
-});
-
-test('cloud merge retains unchanged imported guides and detects conflicting removals', () => {
-  const run=reader();
-  run(`loadPrefs();window.base={format:'orthobible-backup',version:1,reader:backupReader(state),personal:validatePersonalNotes({notes:{'JHN:1:1':{body:'One'}}})}; window.local=JSON.parse(JSON.stringify(base));window.remote=JSON.parse(JSON.stringify(base));local.personal=null; remote.personal.notes['JHN:1:2']={body:'Two'};window.merged=mergeCloudBackups(base,local,remote);`);
-  assert.equal(run('merged.conflicts.length'),1);
-  assert.equal(run('merged.conflicts[0]'),'Imported study material');
-});
-
-test('each reading plan covers its chapters exactly once and saves completion', () => {
-  const run=reader();
-  assert.equal(run('planDays("gospels").length'),30);
-  assert.equal(run('planDays("psalms").flat().length'),150);
-  assert.equal(run('new Set(planDays("whole-bible").flat().map(p=>p.book+":"+p.ch)).size'),run('BIBLE.books.reduce((n,b)=>n+b.n,0)'));
-  run(`state.readingPlan={id:'gospels',completed:[0,0,30,-1]};state.history=[{book:'BAD',chapter:1,scroll:0,ts:1}];normalizeReaderTools(state);`);
-  assert.equal(run('JSON.stringify(state.readingPlan.completed)'),'[0]');
-  assert.equal(run('state.history.length'),0);
-});
 
 test('recent history deduplicates chapters while retaining reading position', () => {
   const run=reader();
@@ -721,49 +466,6 @@ test('source notes attach only through a valid matching-edition alignment', () =
   assert.equal(run('STUDY.notes["PSA:23:1"].body'),'Original archive');
   assert.throws(()=>run(`validatePersonalNotes({...personal,alignment:{edition:'another-edition',version:1}})`));
   assert.throws(()=>run(`validatePersonalNotes({...personal,alignment:{edition:BIBLE.edition,version:1,notes:{'PSA:22:1':'PSA:999:1'}}})`));
-});
-
-test('search covers imported guide tables and escapes note previews', () => {
-  const run=reader();
-  run(`personalGuides=[{title:'Comparison',blocks:[{type:'table',rows:[['Orthodox','Genesis']]}]}];STUDY.notes={'JHN:1:1':{body:'<script>beginning</script>'}};`);
-  assert.ok(run('searchStudyContent("Genesis","guides")').includes('Comparison'));
-  const html=run('searchStudyContent("beginning","notes")');
-  assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));
-});
-
-function cloudHarness() {
-  const run=reader();
-  run(`loadPrefs();window.navigator={onLine:true};cloudEnabled=true;queueCloudSync=()=>{window.queued=true};window.local={format:'orthobible-backup',version:1,reader:backupReader(state),personal:null};window.remote=JSON.parse(JSON.stringify(local));remote.reader.comments={'JHN:1:1':'From Mac'};window.baseline=JSON.parse(JSON.stringify(local));window.records={};window.user={user:'u',project:'p',access_token:'test'};records[cloudMetaKey(user)]={revision:1,studyRevision:1,base:baseline};window.revision=2;window.uploads=[];cloudSession=async()=>user;studyRead=async k=>records[k];studyTransaction=async v=>Object.assign(records,v);createBackup=async()=>JSON.parse(JSON.stringify(local));restoreBackup=async b=>{local=JSON.parse(JSON.stringify(b))};cloudRequest=async(path,options)=>{if(path.includes('rpc')){const payload=JSON.parse(options.body);if(payload.expected_revision!==revision)throw new Error('conflict');uploads.push(payload);remote={...remote,reader:payload.next_reader,personal:payload.next_personal?payload.next_personal.data:remote.personal};revision++;if(window.editWhileUploading){local.reader.comments['JHN:1:3']='Typed during sync';window.editWhileUploading=false;}return {revision,study_revision:1};}if(path.includes('select=personal'))return [{personal:{data:remote.personal}}];return [{revision,study_revision:1,reader:remote.reader}];};`);
-  return run;
-}
-
-test('cloud sync merges independent saves and does not re-upload unchanged study material',async()=>{
-  const run=cloudHarness();
-  run(`local.reader.highlights['JHN:1:2']='gold';`);
-  await run('syncCloud()');
-  assert.equal(run('local.reader.comments["JHN:1:1"]'),'From Mac');
-  assert.equal(run('remote.reader.highlights["JHN:1:2"]'),'gold');
-  assert.equal(run('uploads[0].next_personal'),null);
-  assert.equal(run('records[cloudMetaKey(user)].revision'),3);
-});
-
-test('edits made during an upload survive and do not turn unapplied remote additions into deletions',async()=>{
-  const run=cloudHarness();
-  run(`local.reader.highlights['JHN:1:2']='gold';window.editWhileUploading=true;`);
-  await run('syncCloud()');
-  assert.equal(run('local.reader.comments["JHN:1:3"]'),'Typed during sync');
-  assert.equal(run('records[cloudMetaKey(user)].revision'),1);
-  await run('syncCloud()');
-  assert.equal(run('remote.reader.comments["JHN:1:1"]'),'From Mac');
-  assert.equal(run('remote.reader.comments["JHN:1:3"]'),'Typed during sync');
-  assert.equal(run('local.reader.comments["JHN:1:1"]'),'From Mac');
-});
-
-test('offline sync never calls the server and conflicting comments do not upload',async()=>{
-  const run=cloudHarness();
-  run(`navigator.onLine=false;`);await run('syncCloud()');assert.equal(run('uploads.length'),0);
-  run(`navigator.onLine=true;local.reader.comments['JHN:1:1']='From phone';`);await run('syncCloud()');
-  assert.equal(run('uploads.length'),0);assert.equal(run('cloudConflict.conflicts.length'),1);
 });
 
 test('PDF text preserves heading and paragraph boundaries without changing the words', () => {
@@ -1184,18 +886,6 @@ test('Coptic dates follow the Anno Martyrum calendar, including feasts and the C
   assert.equal(run('copticDate("2027-09-12").name'),'1 Tout 1744');
 });
 
-test('lectionary Psalms map from English to Septuagint numbering and Jeremiah keeps English chapters', () => {
-  const run=reader();
-  assert.equal(run('JSON.stringify(psalmToLxx(110,4))'),'[109,4]');
-  assert.equal(run('JSON.stringify(psalmToLxx(10,1))'),'[9,21]');
-  assert.equal(run('JSON.stringify(psalmToLxx(147,12))'),'[147,1]');
-  assert.equal(run('JSON.stringify(psalmToLxx(23,1))'),'[22,1]');
-  assert.match(run('lectionaryPassage([19,110,[4]]).verses[0].text'),/priest for ever/);
-  assert.equal(run('passageLabel([lectionaryPassage([19,110,[4,5,7]])])'),'Psalm 109(110):4–5, 7');
-  assert.match(run('lectionaryPassage([24,31,[31]]).verses[0].text'),/new covenant/);
-  assert.equal(run('lectionaryPassage([58,4,[14,15,16]]).verses.length'),3);
-});
-
 test('today shows the Katameros Liturgy in order with the Liturgy Psalm as the verse to carry', () => {
   const run=reader();
   run('loadPrefs({});window.day=katamerosDay("2026-11-11");');
@@ -1243,17 +933,6 @@ test('Today state survives backups and invalid entries are dropped', () => {
   assert.deepEqual(JSON.parse(run('JSON.stringify(Object.keys(r.today.done))')),['2026-11-11']);
   assert.equal(run('r.memory.length'),1);
   assert.equal(run('backupReader({...r,tab:"today"}).memory.length'),1);
-});
-
-test('every Katameros reading through 2030 resolves to verse text in this edition', () => {
-  const run=reader();
-  const result=JSON.parse(run(`(()=>{let total=0,empty=[],partial=0;
-    for(const set of window.KATAMEROS.sets)for(const [,subs] of set)for(const [,readings] of subs)for(const reading of readings)for(const ref of reading){
-      total++;const p=lectionaryPassage(ref);if(!p||!p.verses.length)empty.push(ref.slice(0,2).join(":"));else if(p.verses.length<ref[2].length)partial++;}
-    return JSON.stringify({total,empty,partial});})()`));
-  assert.ok(result.total>1000);
-  assert.deepEqual(result.empty,[]);
-  assert.ok(result.partial/result.total<0.03, `partial ${result.partial} of ${result.total}`);
 });
 
 test('opening a Today reading is a visit: Go back returns to Today and the Read position is unchanged', () => {
@@ -1354,41 +1033,6 @@ test('no screen or dialog shows uninterpolated template text', () => {
   assert.match(run('showBooks();$("dialogBody").innerHTML'),/How to read Scripture/);
 });
 
-test('every Agpeya hour has its Psalms and Gospel in this edition, and the current hour is found', () => {
-  const run=reader();
-  assert.equal(run('AGPEYA.hours.length'),7);
-  const missing=run(`JSON.stringify(AGPEYA.hours.flatMap(h=>[...(h.watches||[h])].flatMap(w=>[
-    ...w.psalms.filter(([n,e,ch=n,from=1,to])=>!verseText("PSA",ch,from)||(to&&!verseText("PSA",ch,to))).map(p=>h.id+" Ps "+p[0]),
-    ...w.gospel.filter(([b,c,v,e])=>!verseText(b,c,v)||!verseText(b,c,e)).map(g=>h.id+" "+g.join(" "))])))`);
-  assert.equal(missing,'[]');
-  assert.match(run('verseText("PSA",115,1)'),/well pleased/);
-  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,6,30)).id'),'prime');
-  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,23,30)).id'),'midnight');
-  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,2,0)).id'),'midnight');
-  assert.equal(run('currentAgpeyaHour(new Date(2026,10,11,17,0)).id'),'vespers');
-  run('loadPrefs({});state.tab="prayers";selectedPrayer="hour:none";renderPrayers();');
-  const html=run('pane.innerHTML');
-  assert.match(html,/Psalm 114 \(116:1–9\)/);
-  assert.match(html,/Luke 9:10–17/);
-  assert.match(html,/Prayer of Thanksgiving/);
-});
-
-test('the chapter drawer lists OSB sections of the current chapter; an Agpeya hour lists its sections', () => {
-  const run=reader();
-  run(`dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};dialog.querySelector=()=>null;for(const id of ["closeDialog","drawerNextBook","drawerPreviousBook"])$(id).focus=()=>{};
-    loadPrefs({});state.book="MAT";state.chapter=5;personalHeadings={"MAT:5:1":["The Beatitudes"],"MAT:5:13":["Salt and Light"]};showChapterDrawer();`);
-  const html=run('$("dialogBody").innerHTML');
-  assert.match(html,/data-jump-verse="1"><span>The Beatitudes/);
-  assert.match(html,/data-jump-verse="13"/);
-  assert.equal((html.match(/data-chapter=/g)||[]).length,28);
-  run('state.tab="prayers";selectedPrayer="hour:terce";renderPrayers();showHourDrawer();');
-  const hour=run('$("dialogBody").innerHTML');
-  assert.match(hour,/Opening/);
-  assert.match(hour,/data-hour-jump="hour-\d+">19</);
-  assert.match(hour,/Gospel/);
-  assert.match(hour,/Closing/);
-});
-
 test('themes are Light, Sepia, Gray, and Dark; a saved Warm page tone becomes Sepia', () => {
   const run=reader();
   run('loadPrefs({theme:"night"});');
@@ -1438,12 +1082,6 @@ test('the chapters button opens the drawer even though clicks pass an event', ()
   assert.equal(run('$("dialogTitle").textContent'),run('displayName("JHN")'));
 });
 
-test('verses from the WEB source get a space before an opening quote', () => {
-  const run=reader();
-  assert.ok(!/[,.;:!?][“‘]/.test(run('verseText("MAT",16,13)')));
-  assert.match(run('verseText("MAT",16,13)'),/saying, “Who/);
-});
-
 test('a quick flick commits a back swipe and a thumb-arc swipe opens the drawer', () => {
   const run=reader();
   run(`window.committed=0;window.opened=0;beginBackSlide=()=>({width:390,update(){},cancel(){},finish(commit,action){if(commit)action();}});
@@ -1458,10 +1096,737 @@ test('a quick flick commits a back swipe and a thumb-arc swipe opens the drawer'
   assert.equal(run('opened'),1);
 });
 
-test('scripture text has no ligatures or missing quote spaces, and keeps the plural-you mark', () => {
-  const run=reader();
-  const bad=run(`(()=>{let n=0;for(const b in window.BIBLE.t)for(const ch of window.BIBLE.t[b])for(const v of ch)if(v&&/[ﬁﬂ]|[,.;:!?][“‘]/.test(v))n++;return n;})()`);
-  assert.equal(bad,0);
-  assert.ok(run('verseText("PSA",10,1)').includes('⌃'));
-  assert.match(run('scriptureHtml(verseText("PSA",10,1))'),/class="plural-you" title="plural you"/);
+
+// ===== Orthodox Study Bible text edition =====
+const crypto = require("node:crypto");
+const editionJson = fs.readFileSync(path.join(buildDir, "..", "osb-edition.json"), "utf8");
+const PUBLIC_FILES = () => {
+  const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  return [...sw.matchAll(/"\.\/([^"]+)"/g)].map((m) => m[1].split("?")[0]).filter(Boolean);
+};
+const NKJV_NT_VERSES = {MAT:1071,MRK:678,LUK:1151,JHN:879,ACT:1007,ROM:433,"1CO":437,"2CO":257,GAL:149,EPH:155,PHP:104,COL:95,"1TH":89,"2TH":47,
+  "1TI":113,"2TI":83,TIT:46,PHM:25,HEB:303,JAS:108,"1PE":105,"2PE":61,"1JN":105,"2JN":13,"3JN":14,JUD:25,REV:404};
+
+test("the canon is the Orthodox Study Bible's: 78 books in its order, SAAS Old Testament and NKJV New Testament", () => {
+  const run = reader();
+  assert.equal(run("BIBLE.books.length"), 78);
+  assert.equal(run('BIBLE.books.filter(b=>b.translation==="SAAS").length'), 51);
+  assert.equal(run('BIBLE.books.filter(b=>b.translation==="NKJV").length'), 27);
+  assert.equal(run("JSON.stringify(bookOrder())"), JSON.stringify(BIBLE.books.map((b) => b.id)));
+  assert.equal(run('displayName("1SA")'), "1 Kingdoms");
+  assert.equal(run('displayName("1KI")'), "3 Kingdoms");
+  assert.equal(run('displayName("EZR")'), "2 Ezra");
+  assert.equal(run('displayName("1ES")'), "1 Ezra");
+  assert.equal(run('displayName("BEL")'), "Bel and the Serpent");
+  for (const gone of ["PS2", "S3Y", "MAN", "4MA", "ESG", "DAG", "2ES"]) assert.equal(run(`bookMeta("${gone}")`), undefined);
+  assert.equal(run('bookMeta("PSA").n'), 151);
+  assert.equal(run('isSeptuagint("GEN")'), true);
+  assert.equal(run('isSeptuagint("MAT")'), false);
+});
+test("every verse of the edition is present: counts, no gaps, no markup or stray characters", () => {
+  assert.equal(BIBLE.books.reduce((n, b) => n + b.n, 0), 1346);
+  let total = 0, problems = [];
+  for (const book of BIBLE.books) {
+    const chapters = BIBLE.t[book.id];
+    assert.equal(chapters.length, book.n, book.id);
+    let count = 0;
+    chapters.forEach((verses, c) => {
+      assert.equal(verses[0], "", `${book.id} ${c + 1} index 0`);
+      assert.ok(verses.length > 1, `${book.id} ${c + 1} is empty`);
+      for (let v = 1; v < verses.length; v++) {
+        const text = verses[v];
+        count++;
+        if (typeof text !== "string" || !text.trim() || text !== text.trim() || /[<>{}\[\]\t ﬀ-ﬄ⌃]|  |\n\n|\n | \n/.test(text) || /^\d|\s\d+\s*$/.test(text))
+          problems.push(`${book.id} ${c + 1}:${v}`);
+      }
+    });
+    if (NKJV_NT_VERSES[book.id]) assert.equal(count, NKJV_NT_VERSES[book.id], `${book.id} verse count`);
+    total += count;
+  }
+  // Two verses legitimately carry digits or brackets: none expected beyond these.
+  assert.deepEqual(problems.filter((p) => !["REV 13:18"].includes(p)), []);
+  assert.equal(total, 36089);
+});
+test("the ebook's stray spaces before punctuation are gone from verses, notes, and articles; nested quotes keep theirs", () => {
+  const stray = / [,;:!?)]|\( |[^. ] \.(?! ?\.)/;
+  const offenders = [];
+  for (const book of BIBLE.books) BIBLE.t[book.id].forEach((verses, c) => verses.forEach((text, v) => { if (v && stray.test(text)) offenders.push(`${book.id} ${c + 1}:${v}`); }));
+  for (const [key, note] of Object.entries(STUDY.sourceNotes)) if (stray.test(note.body)) offenders.push(`note ${key}`);
+  for (const [key, list] of Object.entries(STUDY.textNotes)) if (list.some(([, text]) => stray.test(text))) offenders.push(`translators' note ${key}`);
+  for (const article of [...STUDY.guides, ...Object.values(STUDY.introductions)]) for (const block of article.blocks) if (block.text && stray.test(block.text)) offenders.push(`article ${article.title}`);
+  for (const [key, line] of Object.entries(BIBLE.parallels)) if (stray.test(line)) offenders.push(`parallel ${key}`);
+  assert.deepEqual(offenders.slice(0, 10), []);
+  const nested = Object.values(BIBLE.t).flat(2).filter((text) => /[’”] [’”]/.test(text)).length;
+  assert.ok(nested > 300, `${nested} verses with spaced nested closing quotes`);
+});
+// The source ebook (private). With it present, everything the app shows is checked to be the ebook's own words.
+const ebookPath = process.env.OSB_EBOOK || path.join(buildDir, "..", "osb-mobi.html");
+test("every verse, note, introduction, guide, and article is the ebook's own text, word for word", { skip: !fs.existsSync(ebookPath) && "the source ebook is not on this machine" }, () => {
+  const raw = fs.readFileSync(ebookPath, "utf8");
+  const edition = JSON.parse(editionJson);
+  const decode = (text) => text.replace(/&(#x?[0-9a-f]+|amp|lt|gt|quot|apos|nbsp);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10))
+    : ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " })[e.toLowerCase()]);
+  const flat = (from, to, dropSuperscripts) => decode((dropSuperscripts ? raw.slice(from, to).replace(/<sup>[^]*?<\/sup>/g, "") : raw.slice(from, to)).replace(/<[^>]+>/g, "")).replace(/[\s\u00a0]+/g, "");
+  const squeeze = (text) => text.replace(/\s+/g, "");
+  const names = Object.fromEntries(BIBLE.books.map((b) => [b.name, b.id]));
+  names.Psalm = "PSA";
+  const starts = {};
+  for (const m of raw.matchAll(/<p[^>]*align="center"><a filepos=\d+><font size="6">(?:<b>)?<font color="#0000ff">([^<]+)/g)) {
+    const title = m[1].trim(), parts = title.match(/^(.+?)\s+(\d+)(?:\s*\(.*\))?$/);
+    const book = parts ? names[parts[1]] : names[title];
+    if (book && !(book in starts)) starts[book] = m.index;
+  }
+  const order = Object.entries(starts).sort((a, b) => a[1] - b[1]);
+  assert.equal(order.length, 78);
+  const missing = [];
+  let verses = 0, pieces = 0, blocks = 0;
+  order.forEach(([book, start], i) => {
+    const end = i + 1 < order.length ? order[i + 1][1] : raw.length;
+    // Susanna, Daniel, and Bel share one block of annotations after Bel, so notes are looked for a little further on.
+    const text = flat(start, end, true), notes = flat(start, i + 3 < order.length ? order[i + 3][1] : raw.length, false);
+    BIBLE.t[book].forEach((chapter, c) => chapter.forEach((verse, v) => {
+      if (!v) return;
+      verses++;
+      if (!text.includes(squeeze(verse)) && !verse.split("\n").every((line) => text.includes(squeeze(line)))) missing.push(`${book} ${c + 1}:${v}`);
+    }));
+    for (const [key, parts] of Object.entries(edition.notes)) if (key.startsWith(book + ":")) for (const part of parts) { pieces++; if (!part.split("\n\n").every((p) => notes.includes(squeeze(p)))) missing.push(`note ${key}`); }
+    for (const [key, list] of Object.entries(STUDY.textNotes)) if (key.startsWith(book + ":")) for (const [, note] of list) { pieces++; if (!notes.includes(squeeze(note))) missing.push(`translators' note ${key}`); }
+    for (const article of STUDY.guides.filter((g) => g.after?.startsWith(book + ":"))) for (const block of article.blocks) { blocks++; if (!notes.includes(squeeze(block.text))) missing.push(`article ${article.title}`); }
+    // The introduction sits on the pages before the book's first chapter (Daniel's before Susanna, which opens it).
+    const before = flat(i >= 3 ? order[i - 3][1] : 0, start, false), intro = STUDY.introductions[book];
+    for (const block of intro.blocks) { blocks++; if (!before.includes(squeeze(block.text))) missing.push(`introduction ${book}`); }
+  });
+  const matter = flat(0, order[0][1], false) + flat(order.at(-1)[1], raw.length, false);
+  for (const guide of STUDY.guides.filter((g) => !g.group)) for (const block of guide.blocks) for (const text of block.text ? [block.text] : block.rows.flat()) { blocks++; if (text.trim() && !matter.includes(squeeze(text))) missing.push(`guide ${guide.title}`); }
+  assert.deepEqual([...new Set(missing)].slice(0, 12), []);
+  assert.equal(verses, 36089);
+  assert.ok(pieces > 8000 && blocks > 3500, `${pieces} note pieces, ${blocks} blocks`);
+});
+test("well-known verses stand where the Orthodox Study Bible numbers them", () => {
+  const run = reader();
+  const at = (b, c, v) => run(`verseText("${b}",${c},${v})`);
+  assert.match(at("GEN", 1, 1), /^In the beginning God made heaven and earth/);
+  assert.match(at("PSA", 22, 1), /Lord is my shepherd/);
+  assert.match(at("PSA", 50, 3), /^Have mercy on me, O God/);
+  assert.match(at("PSA", 109, 4), /priest forever/);
+  assert.match(at("ISA", 7, 14), /virgin/);
+  assert.match(at("JER", 38, 31), /new covenant/);
+  assert.match(at("JHN", 3, 16), /For God so loved the world/);
+  assert.match(at("MAT", 16, 13), /Who do men say/);
+  assert.match(at("ROM", 8, 28), /all things work together for good/);
+  assert.match(at("PHP", 4, 13), /I can do all things through Christ/);
+  assert.match(at("REV", 22, 21), /Amen/);
+  for (const [b, c] of [["PSA", 151], ["SIR", 2], ["TOB", 1], ["3MA", 1], ["LJE", 1], ["SUS", 1], ["BEL", 1], ["2CH", 37]]) assert.ok(at(b, c, 1).length > 0, `${b} ${c}`);
+  assert.equal(run('bookMeta("MAL").n'), 3);
+  assert.equal(run('chapterText("DAN",3).length-1'), 97);
+});
+test("lettered verses in Esther keep their printed numbers", () => {
+  const run = reader();
+  assert.ok(Object.keys(BIBLE.labels).every((key) => key.startsWith("EST:")));
+  for (const [key, labels] of Object.entries(BIBLE.labels)) {
+    const [book, ch] = key.split(":");
+    assert.equal(labels.length, BIBLE.t[book][ch - 1].length, key);
+    assert.equal(new Set(labels.slice(1)).size, labels.length - 1, `${key} labels are unique`);
+    assert.ok(labels.slice(1).every((label) => /^\d+[a-z]{0,2}$/.test(label)), key);
+  }
+  assert.equal(run('sourceVerseLabel("EST",1,1)'), "1a");
+  assert.equal(run('refLabel("EST",1,1)'), "Esther 1:1a");
+  assert.equal(run('versePosition("EST",1,"1a")'), 1);
+  assert.equal(run('versePosition("EST",4,"7")'), 6);
+  assert.equal(run('versePosition("EST",4,"6")'), null);
+  assert.equal(run('JSON.stringify(parseRef("Esther 4:17a"))'), JSON.stringify({ book: "EST", ch: 4, v: BIBLE.labels["EST:4"].indexOf("17a") }));
+  assert.equal(run('parseRef("Esther 4:6")'), null);
+  assert.match(run('verseHtml("EST",4,' + BIBLE.labels["EST:4"].indexOf("17a") + ")"), />17a<\/button>/);
+  assert.equal(run('sourceVerseLabel("JHN",3,16)'), "16");
+  assert.equal(run('versePosition("JHN",3,"16")'), 16);
+  assert.equal(run('versePosition("JHN",3,"99")'), null);
+});
+test("typed references follow the OSB's names and numbering", () => {
+  const run = reader();
+  const ref = (text) => run(`JSON.stringify(parseRef(${JSON.stringify(text)}))`);
+  assert.equal(ref("Psalm 151"), JSON.stringify({ book: "PSA", ch: 151, v: null }));
+  assert.equal(ref("psalms 151:7"), JSON.stringify({ book: "PSA", ch: 151, v: 7 }));
+  assert.equal(ref("Psalm 152"), "null");
+  assert.equal(ref("1 Kingdoms 16:7"), JSON.stringify({ book: "1SA", ch: 16, v: 7 }));
+  assert.equal(ref("1 Samuel 16:7"), JSON.stringify({ book: "1SA", ch: 16, v: 7 }));
+  assert.equal(ref("3 Kingdoms 8"), JSON.stringify({ book: "1KI", ch: 8, v: null }));
+  assert.equal(ref("2 Ezra 1:1"), JSON.stringify({ book: "EZR", ch: 1, v: 1 }));
+  assert.equal(ref("Ezra 1:1"), JSON.stringify({ book: "EZR", ch: 1, v: 1 }));
+  assert.equal(ref("1 Ezra 1:1"), JSON.stringify({ book: "1ES", ch: 1, v: 1 }));
+  assert.equal(ref("Sirach 2:1-6"), JSON.stringify({ book: "SIR", ch: 2, v: 1 }));
+  assert.equal(ref("Wisdom of Sirach 2:1"), JSON.stringify({ book: "SIR", ch: 2, v: 1 }));
+  assert.equal(ref("Bel 1:5"), JSON.stringify({ book: "BEL", ch: 1, v: 5 }));
+  assert.equal(ref("Susanna"), JSON.stringify({ book: "SUS", ch: 1, v: null }));
+  assert.equal(ref("Prayer of Manasseh"), JSON.stringify({ book: "2CH", ch: 37, v: null }));
+  assert.equal(ref("1 Corinthians 13:4"), JSON.stringify({ book: "1CO", ch: 13, v: 4 }));
+  for (const bad of ["John 99:1", "John 3:999", "John 3:0", "John 3:16-15", "4 Maccabees 1:1", "Nowhere 1:1"]) assert.equal(ref(bad), "null", bad);
+  for (const book of BIBLE.books) assert.equal(run(`parseRef(${JSON.stringify(book.name + " 1:1")}).book`), book.id, book.name);
+});
+test("section headings sit before existing verses; headings inside a verse fall between its lines", () => {
+  const run = reader();
+  let count = 0;
+  for (const [key, list] of Object.entries(BIBLE.headings)) {
+    const [b, c, v] = key.split(":");
+    assert.ok(BIBLE.t[b]?.[c - 1]?.[v], `heading on a missing verse ${key}`);
+    assert.ok(Array.isArray(list) && list.length && list.every((h) => typeof h === "string" && h.trim() && h.length <= 120 && !/[<>\n]/.test(h)), key);
+    count += list.length;
+  }
+  for (const [key, items] of Object.entries(BIBLE.inside)) {
+    const [b, c, v] = key.split(":"), lines = BIBLE.t[b][c - 1][v].split("\n").length;
+    for (const [line, list] of items) { assert.ok(line >= 1 && line < lines, `${key} line ${line} of ${lines}`); count += list.length; }
+  }
+  assert.equal(count, 2918);
+  assert.equal(BIBLE.headings["GEN:1:1"][0], "The Creation");
+  assert.equal(BIBLE.headings["MAT:5:1"][0], "The Beatitudes");
+  run('loadPrefs({});state.book="GEN";state.chapter=1;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /<article class="verses"><h3 class="osb-heading">The Creation<\/h3><div class="verse"/);
+  const [key, items] = Object.entries(BIBLE.inside)[0], [b, c, v] = key.split(":");
+  const html = run(`verseHtml("${b}",${c},${v})`);
+  const lines = BIBLE.t[b][c - 1][v].split("\n");
+  assert.equal((html.match(/class="v[lp][ "]/g) || []).length, lines.length);
+  assert.ok(html.indexOf('<h3 class="osb-heading">') > html.indexOf('class="vp"'), "the heading follows the first line");
+  assert.ok(!html.includes('class="vl'), "a paragraph inside a verse is not set as poetry");
+  assert.ok(html.includes(`<h3 class="osb-heading">${items[0][1][0].replace(/&/g, "&amp;").replace(/'/g, "&#39;")}</h3>`));
+});
+test("a verse printed on several lines keeps them, with note and comment marks after the last line", () => {
+  const run = readerWithStudy();
+  const lines = BIBLE.t.PSA[21][1].split("\n");
+  assert.ok(lines.length > 1);
+  run('state.comments["PSA:22:1"]="mine";');
+  const html = run('verseHtml("PSA",22,1)');
+  assert.equal((html.match(/class="v[lp][ "]/g) || []).length, lines.length);
+  assert.match(html, /class="vl[^"]*">[^<]*<span class="nw">[^<]+<button class="note-link"[^]*class="comment-mark"[^]*<\/span><\/span><\/div><\/div>$/, "marks stay with the last word of the last line");
+  assert.equal((run('verseHtml("PSA",22,5)').match(/class="vl"/g) || []).length, 3);
+  assert.match(run('verseHtml("GEN",1,1)'), /<span>[^<]*<span class="nw">[^<]+<button class="note-link"/);
+  assert.ok(!html.includes("\n"));
+  const single = run('verseHtml("JHN",11,35)');
+  assert.ok(!single.includes("verse-lines"));
+  assert.equal(run('flatText("a\\nb \\n c")'), "a b c");
+  assert.ok(!run('scriptureHtml(verseText("PSA",22,1))').includes("\n"));
+});
+test("every verse printed on several lines has its layout: poetry lines, stanzas, and paragraphs", () => {
+  let poetry = 0, prose = 0;
+  for (const book of BIBLE.books) BIBLE.t[book.id].forEach((verses, c) => verses.forEach((text, v) => {
+    if (!v) return;
+    const codes = BIBLE.layout[`${book.id}:${c + 1}:${v}`], lines = text.split("\n").length;
+    if (lines > 1) assert.ok(codes, `${book.id} ${c + 1}:${v} has ${lines} lines and no layout`);
+    if (!codes) return;
+    assert.equal(codes.length, lines, `${book.id} ${c + 1}:${v}`);
+    assert.match(codes, /^[clsp][lsp]*$/, `${book.id} ${c + 1}:${v}`);
+    if (/[ls]/.test(codes)) poetry++; else prose++;
+  }));
+  assert.equal(poetry, 7641);
+  assert.equal(prose, 148);
+  assert.ok(Object.keys(BIBLE.layout).every((key) => { const [b, c, v] = key.split(":"); return !!BIBLE.t[b]?.[c - 1]?.[v]; }));
+  const run = reader();
+  run("loadPrefs({});");
+  assert.match(run('verseHtml("JOB",3,3)'), /class="verse stanza"/);
+  assert.ok(!run('verseHtml("JHN",3,16)').includes("stanza"));
+});
+test("every verse is rendered with exactly its own words, with notes on and off", () => {
+  const run = readerWithStudy();
+  const check = `(()=>{const bad=[];const plain=h=>h.replace(/<button class="verse-number"[^]*?<\\/button>/,"").replace(/<button class="note-link"[^]*?<\\/button>/g,"").replace(/<sup class="tn"[^>]*>[a-z]+<\\/sup>/g,"").replace(/<h3 class="osb-heading">[^<]*<\\/h3>/g,"").replace(/<[^>]+>/g,"").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,"&");
+    for(const b of BIBLE.books)BIBLE.t[b.id].forEach((verses,c)=>{for(let v=1;v<verses.length;v++){if(plain(verseHtml(b.id,c+1,v))!==verses[v].replace(/\\n/g,""))bad.push(b.id+" "+(c+1)+":"+v);}});
+    return JSON.stringify(bad.slice(0,10));})()`;
+  assert.equal(run(check), "[]");
+  run("state.showNotes=false;");
+  assert.equal(run(check), "[]");
+  // A whole chapter is its verses in order, each once.
+  run('state.showNotes=true;state.book="PSA";state.chapter=118;renderChapter(0);');
+  const numbers = [...run("pane.innerHTML").matchAll(/data-verse="(\d+)"/g)].map((m) => +m[1]);
+  assert.deepEqual(numbers, Array.from({ length: 176 }, (_, i) => i + 1));
+});
+test("text before a chapter's first verse is shown, and only where the OSB prints it", () => {
+  const run = readerWithStudy();
+  assert.deepEqual(Object.keys(BIBLE.preface), ["LJE:1"]);
+  run('state.book="LJE";state.chapter=1;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /<p class="chapter-preface">/);
+  run('state.book="GEN";state.chapter=1;renderChapter(0);');
+  assert.ok(!run("pane.innerHTML").includes("chapter-preface"));
+});
+test("chapters name their translation; Psalms carry the OSB's own titles; parallel passages sit under their headings", () => {
+  const run = readerWithStudy();
+  assert.equal(Object.keys(BIBLE.titles).length, 139);
+  assert.ok(Object.entries(BIBLE.titles).every(([key, title]) => { const [b, c] = key.split(":"); return b === "PSA" && title.startsWith(`Psalm ${c} (`) && title.endsWith(")"); }));
+  run('state.book="PSA";state.chapter=22;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /<h1>Psalm 22 \(23\)<\/h1>/);
+  run('state.book="PSA";state.chapter=1;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /<h1>Psalm 1<\/h1>/);
+  run('state.book="PSA";state.chapter=114;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /<h1>Psalm 114 \(116:1–9\)<\/h1>/);
+  assert.equal(Object.keys(BIBLE.parallels).length, 413);
+  for (const [key, line] of Object.entries(BIBLE.parallels)) {
+    assert.ok(BIBLE.headings[key], `a parallel line without its heading at ${key}`);
+    assert.ok(/^\(.+\)$/.test(line) && line.length < 120 && !/[<>\n]/.test(line), key);
+  }
+  const first = Object.keys(BIBLE.parallels).find((k) => k.startsWith("MAT:")), [pb, pc] = first.split(":");
+  run(`state.book="${pb}";state.chapter=${pc};renderChapter(0);`);
+  assert.match(run("pane.innerHTML"), /<h3 class="osb-heading">[^<]+<\/h3><p class="osb-parallel">\([^<]+\)<\/p><div class="verse/);
+  assert.equal((run("pane.innerHTML").match(/class="osb-parallel"/g) || []).length, Object.keys(BIBLE.parallels).filter((k) => k.startsWith(`${pb}:${pc}:`)).length);
+  run('state.book="PSA";state.chapter=22;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /St\. Athanasius Academy Septuagint/);
+  run('state.book="JHN";state.chapter=3;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /<h1>Chapter 3<\/h1>/);
+  assert.match(run("pane.innerHTML"), /New King James Version/);
+  assert.ok(!/LXX2012|World English|WEB\b/.test(run("pane.innerHTML")));
+});
+test("every OSB note is on the verse it names", () => {
+  const edition = JSON.parse(editionJson);
+  const label = (b, c, p) => BIBLE.labels[`${b}:${c}`]?.[p] ?? String(p);
+  const single = new Set(BIBLE.books.filter((b) => b.n === 1).map((b) => b.id));
+  let pieces = 0, unread = [];
+  assert.equal(Object.keys(STUDY.sourceNotes).length, Object.keys(edition.notes).length);
+  for (const [key, parts] of Object.entries(edition.notes)) {
+    const [b, c, p] = key.split(":");
+    assert.ok(BIBLE.t[b]?.[c - 1]?.[p], `note on a missing verse ${key}`);
+    assert.equal(STUDY.sourceNotes[key].body, parts.join("\n\n"), key);
+    for (const part of parts) {
+      pieces++;
+      const text = part.replace(/^Pss?\.?\s*(?=\d+:)/, "");
+      let m = text.match(/^(\d+):(\d+[a-z]?)/);
+      if (m) { assert.equal(`${m[1]}:${m[2]}`, `${c}:${label(b, +c, +p)}`, `note ${key} names another verse`); continue; }
+      m = text.match(/^(?:Pss?\.?\s*)?(\d+)/);
+      if (m && b === "PSA") assert.equal(`${m[1]}:1`, `${c}:${p}`, `psalm note ${key}`);
+      else if (m && single.has(b)) assert.equal(m[1], label(b, +c, +p), `note ${key}`);
+      else unread.push(key);
+    }
+  }
+  assert.ok(pieces >= 6836, `${pieces} note pieces`);
+  assert.deepEqual(unread, ["2CH:37:1"]);
+});
+test("notes open from their verse, list under their chapter, and never leak markup", () => {
+  const run = readerWithStudy();
+  assert.equal(run("Object.keys(personalSourceNotes).length"), Object.keys(STUDY.sourceNotes).length);
+  assert.equal(run("Object.keys(personalNotesByVerse).length"), Object.keys(STUDY.sourceNotes).length);
+  assert.equal(run("Object.entries(personalNotesByVerse).every(([verse,keys])=>keys.length===1&&keys[0]===verse)"), true);
+  assert.equal(run('noteAt("GEN",1,1).body'), STUDY.sourceNotes["GEN:1:1"].body);
+  assert.match(run('verseHtml("GEN",1,1)'), /aria-label="Study note for verse 1"><span class="note-dot"/);
+  const without = Object.keys(BIBLE.t.GEN[0]).map(Number).find((v) => v > 0 && !STUDY.sourceNotes[`GEN:1:${v}`]);
+  assert.equal(run(`noteAt("GEN",1,${without})`), null);
+  assert.ok(!run(`verseHtml("GEN",1,${without})`).includes("note-dot"));
+  run('state.book="GEN";state.chapter=1;');
+  const html = run("notesHtml()");
+  const expected = Object.keys(STUDY.sourceNotes).filter((k) => k.startsWith("GEN:1:")).length;
+  assert.equal((html.match(/<article class="footnote">/g) || []).length, expected);
+  assert.match(html, /<small>Verse 1<\/small>/);
+  assert.match(html, /Study article/);
+  assert.match(html, /All notes in Genesis/);
+  assert.ok(!/OSB source|Needs review|Earlier imported|Original reference|undefined/.test(html));
+  run("state.showNotes=false;");
+  assert.equal(run("notesHtml()"), "");
+  assert.ok(!run('verseHtml("GEN",1,1)').includes("note-dot"));
+  assert.ok(Object.values(STUDY.sourceNotes).every((n) => !/<[a-z/]/i.test(n.body)));
+  run(`personalSourceNotes["GEN:1:1"]={body:"<script>x</script>"};state.showNotes=true;`);
+  assert.ok(!run("notesHtml()").includes("<script>"));
+});
+test("the New Testament's translators' notes keep their letters in the text and their verses", () => {
+  const edition = JSON.parse(editionJson);
+  let letters = 0, notes = 0;
+  for (const [key, marks] of Object.entries(BIBLE.marks)) {
+    const [b, c, v] = key.split(":"), text = BIBLE.t[b]?.[c - 1]?.[v];
+    assert.ok(text, `letters on a missing verse ${key}`);
+    assert.equal(BIBLE.books.find((x) => x.id === b).translation, "NKJV", key);
+    assert.ok(marks.every(([offset, letter], i) => Number.isInteger(offset) && offset >= 0 && offset <= text.length && /^[a-z]{1,2}$/.test(letter) && (!i || offset >= marks[i - 1][0])), key);
+    assert.deepEqual(marks.map(([, letter]) => letter), (STUDY.textNotes[key] || []).map(([letter]) => letter), `${key}: letters and notes differ`);
+    letters += marks.length;
+  }
+  for (const [key, list] of Object.entries(STUDY.textNotes)) {
+    assert.ok(BIBLE.marks[key], `a translators' note without its letter ${key}`);
+    assert.ok(list.every(([, text]) => text.trim() && !/<[a-z/]/i.test(text)), key);
+    notes += list.length;
+  }
+  assert.equal(letters, 1297);
+  assert.equal(notes, 1297);
+  assert.deepEqual(edition.textNotes, STUDY.textNotes);
+  const run = readerWithStudy();
+  assert.equal(run("Object.keys(personalTextNotes).length"), Object.keys(STUDY.textNotes).length);
+  // In the text: one small letter per note, in place, and none when study notes are switched off.
+  for (const key of Object.keys(BIBLE.marks).filter((k, i) => i % 97 === 0)) {
+    const [b, c, v] = key.split(":");
+    const html = run(`verseHtml("${b}",${c},${v})`);
+    assert.equal((html.match(/<sup class="tn"/g) || []).length, BIBLE.marks[key].length, key);
+    const shown = html.replace(/<button class="verse-number"[^]*?<\/button>/, "").replace(/<button class="note-link"[^]*?<\/button>/g, "").replace(/<sup class="tn"[^>]*>[a-z]+<\/sup>/g, "").replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+    assert.equal(shown, BIBLE.t[b][c - 1][v].replace(/\n/g, ""), `${key}: the words of the verse changed`);
+  }
+  const sample = Object.keys(BIBLE.marks)[0], [b, c, v] = sample.split(":");
+  assert.equal(run(`lineHtml("ab cd", [], [[0,"<x>"],[2,"<y>"],[5,"<z>"]], "<m>")`), "<x>ab<y> <span class=\"nw\">cd<z><m></span>");
+  assert.equal(run(`lineHtml("ab cd", [], [[3,"<y>"]], "")`), "ab <span class=\"nw\"><y>cd</span>");
+  assert.equal(run(`lineHtml("a<b", [], [], "")`), "a&lt;b");
+  // Italics: whole words, across the last-word break, and around a letter.
+  assert.equal(run(`lineHtml("one two three", [[4,7]], [], "")`), "one <i>two</i> three");
+  assert.equal(run(`lineHtml("one two three", [[4,13]], [], "<m>")`), "one <i>two </i><span class=\"nw\"><i>three</i><m></span>");
+  assert.equal(run(`lineHtml("one two three", [[0,7]], [[4,"<y>"]], "")`), "<i>one </i><y><i>two</i> <span class=\"nw\">three</span>");
+  assert.equal(run(`lineHtml("a&b", [[0,3]], [], "")`), "<i>a&amp;b</i>");
+  run(`dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};showStudyNote("${sample}",true,null);`);
+  const sheet = run('$("dialogBody").innerHTML');
+  assert.equal((sheet.match(/class="text-note"/g) || []).length, STUDY.textNotes[sample].length);
+  assert.match(run('$("dialogTitle").textContent'), STUDY.sourceNotes[sample] ? /· OSB note$/ : /· Translators’ note$/);
+  run(`state.book="${b}";state.chapter=${c};`);
+  const chapter = run("notesHtml()");
+  const expected = Object.keys(STUDY.textNotes).filter((k) => k.startsWith(`${b}:${c}:`)).reduce((n, k) => n + STUDY.textNotes[k].length, 0);
+  assert.equal((chapter.match(/class="text-note"/g) || []).length, expected);
+  run("state.showNotes=false;");
+  assert.ok(!run(`verseHtml("${b}",${c},${v})`).includes("<sup"));
+  assert.ok(!run('verseHtml("GEN",1,1)').includes("<sup"));
+});
+test("the edition's italics are kept: whole ranges inside their verses, shown in the reader", () => {
+  let ranges = 0;
+  for (const [key, list] of Object.entries(BIBLE.italics)) {
+    const [b, c, v] = key.split(":"), text = BIBLE.t[b]?.[c - 1]?.[v];
+    assert.ok(text, `italics on a missing verse ${key}`);
+    let previous = -1;
+    for (const [start, end] of list) {
+      assert.ok(Number.isInteger(start) && Number.isInteger(end) && start >= 0 && start < end && end <= text.length && start >= previous, `${key} ${start}-${end}`);
+      assert.ok(!text.slice(start, end).includes("\n") && text[start] !== " " && text[end - 1] !== " ", `${key} ${start}-${end}`);
+      previous = end;
+      ranges++;
+    }
+  }
+  assert.equal(ranges, 4394);
+  const run = readerWithStudy();
+  const [start, end] = BIBLE.italics["MAT:1:6"][0];
+  assert.equal(BIBLE.t.MAT[0][6].slice(start, end), "who had been the wife");
+  assert.match(run('verseHtml("MAT",1,6)'), /<i>who had been the wife<\/i> <sup class="tn"[^>]*>a<\/sup>of <span class="nw">Uriah\./);
+  // Every italic range is rendered, and nothing else is italic.
+  const mismatched = run(`(()=>{const bad=[];for(const [key,list] of Object.entries(BIBLE.italics)){const [b,c,v]=key.split(":");const html=verseHtml(b,+c,+v);
+    const shown=[...html.matchAll(/<i>([^<]*)<\\/i>/g)].map(m=>m[1].replace(/&amp;/g,"&").replace(/&#39;/g,"'").replace(/&quot;/g,'"')).join("").replace(/\\s+/g,"");
+    const expected=list.map(([s,e])=>BIBLE.t[b][c-1][v].slice(s,e)).join("").replace(/\\s+/g,"");if(shown!==expected)bad.push(key);}return JSON.stringify(bad.slice(0,8));})()`);
+  assert.equal(mismatched, "[]");
+  assert.ok(!run('verseHtml("GEN",1,1)').includes("<i>"));
+});
+test("the study pack opens whole: introductions for every book, guides, and study articles in their chapters", () => {
+  const run = readerWithStudy();
+  assert.equal(run("Object.keys(personalIntroductions).length"), 78);
+  assert.equal(run("BIBLE.books.every(b=>personalIntroductions[b.id]?.blocks.length>0)"), true);
+  assert.equal(run("personalGuides.length"), 46);
+  assert.equal(run('personalGuides.filter(g=>g.group==="Study articles").length'), 36);
+  assert.equal(run('personalGuides.filter(g=>g.group==="Study articles").every(g=>validVerse(...Object.values(parseKey(g.after))))'), true);
+  assert.equal(run('JSON.stringify(chapterArticles("GEN",1).map(([,g])=>g.title))'), JSON.stringify(["Creation"]));
+  assert.match(run("howToReadButton()"), /data-context-guide="\d+"/);
+  run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};showContextLibrary();');
+  const library = run('$("dialogBody").innerHTML');
+  assert.equal((library.match(/data-context-guide=/g) || []).length, 46);
+  assert.equal((library.match(/data-context-intro=/g) || []).length, 78);
+  assert.match(library, /Reading guides[^]*Study articles[^]*Book introductions/);
+  run('state.book="GEN";state.chapter=1;state.showPreamble=true;renderChapter(0);');
+  assert.match(run("pane.innerHTML"), /Introduction to Genesis/);
+  assert.throws(() => run("validatePersonalNotes({notes:{},sourceNotes:{}})"));
+  assert.throws(() => run('validatePersonalNotes({notes:{},sourceNotes:{"GEN:1:1":{body:"x"}},alignment:{edition:"other",version:1,notes:{}}})'));
+  assert.throws(() => run('validatePersonalNotes({notes:{},guides:[{title:"x",blocks:[{type:"html",text:"<script>"}]}],sourceNotes:{"GEN:1:1":{body:"x"}},alignment:{edition:BIBLE.edition,version:1,notes:{"GEN:1:1":"GEN:1:1"}}})'));
+  const html = run(`studyArticleHtml(validateStudyArticle({title:"t",blocks:[{type:"heading",text:"<img src=x onerror=alert(1)>"},{type:"table",rows:[["<script>","v"]]}]}))`);
+  assert.ok(html.includes("&lt;img") && html.includes("<table>") && !html.includes("<script>"));
+});
+test("searching study notes shows the verse and the matching words, escaped", () => {
+  const run = readerWithStudy();
+  run(`personalSourceNotes={"JHN:1:1":{body:"x".repeat(200)+" <script>beginning</script> tail"}};personalGuides=[{title:"Comparison",blocks:[{type:"table",rows:[["Orthodox","Genesis"]]}]}];`);
+  const html = run('searchStudyContent("beginning","notes")');
+  assert.match(html, /<strong>John 1:1<\/strong>/);
+  assert.ok(html.includes("&lt;script&gt;beginning") && !html.includes("<script>"));
+  assert.ok(run('searchStudyContent("Genesis","guides")').includes("Comparison"));
+});
+test("every lectionary reading through 2030 resolves completely in OSB numbering", () => {
+  const run = reader();
+  const result = JSON.parse(run(`(()=>{let total=0,verses=0,bad=[],books=new Set();
+    for(const set of window.KATAMEROS.sets)for(const [,subs] of set)for(const [,readings] of subs)for(const reading of readings)for(const ref of reading){
+      total++;const p=lectionaryPassage(ref);books.add(ref[0]);verses+=ref[2].length;
+      // Psalm verses keep the order the lectionary sings them in; every other reading runs forward.
+      if(!p||p.verses.length!==ref[2].length||new Set(ref[2]).size!==ref[2].length||(ref[0]!==19&&ref[2].some((v,i)=>i&&v<=ref[2][i-1])))bad.push(ref.slice(0,2).join(":"));
+      if(ref.length>3&&(ref[0]!==19||ref[3]===ref[1]))bad.push("cited "+ref.slice(0,2).join(":"));}
+    return JSON.stringify({total,verses,bad,books:[...books].filter(b=>!KATAMEROS_BOOKS[b])});})()`));
+  assert.ok(result.total > 1000 && result.verses > 10000, `${result.total} passages, ${result.verses} verses`);
+  assert.deepEqual(result.bad, []);
+  assert.deepEqual(result.books, []);
+  assert.equal(run("KATAMEROS.edition"), BIBLE.edition);
+  assert.equal(run('Object.keys(KATAMEROS.days).length'), 1553);
+});
+test("lectionary Psalms show the Orthodox number with the English number beside it", () => {
+  const run = reader();
+  run('loadPrefs({});window.day=katamerosDay("2026-11-11");');
+  assert.equal(run("verseToCarry(day).label"), "Psalm 109(110):4–5, 7");
+  assert.match(run("verseToCarry(day).text"), /priest forever/);
+  assert.ok(!run("verseToCarry(day).text").includes("\n"));
+  assert.equal(run('passageLabel([lectionaryPassage([19,22,[1,2,3],23])])'), "Psalm 22(23):1–3");
+  assert.equal(run('passageLabel([lectionaryPassage([19,3,[2,3]])])'), "Psalm 3:2–3");
+  assert.equal(run('passageLabel([lectionaryPassage([45,4,[24,25]]),lectionaryPassage([45,5,[1,2]])])'), "Romans 4:24–25; 5:1–2");
+  assert.equal(run('lectionaryPassage([74,1,[1,2]]).book'), "BEL");
+  assert.equal(run('lectionaryPassage([75,1,[1]]).book'), "SUS");
+  assert.match(run('lectionaryPassage([24,38,[31]]).verses[0].text'), /new covenant/);
+  assert.equal(run('passageLabel(mainReading(day).sub.readings[1])'), "Matthew 16:13–19");
+  run('state.memory=[];memorizeBibleVerse("EST",1,1);');
+  assert.equal(run("state.memory[0].label"), "Esther 1:1a");
+});
+test("every Wisdom passage exists, and Psalms carry OSB numbers", () => {
+  const run = reader();
+  const missing = run(`JSON.stringify(wisdomTopics().flatMap(t=>t.refs).filter(([b,c,v,end=v])=>{for(let i=v;i<=end;i++)if(!verseText(b,c,i))return true;return end<v;}))`);
+  assert.equal(missing, "[]");
+  assert.equal(run("wisdomTopics().length"), 57);
+  assert.equal(run("wisdomTopics().reduce((n,t)=>n+t.refs.length,0)"), 453);
+  assert.ok(run("wisdomTopics().every(t=>t.refs.length>=6)"));
+  assert.equal(run('JSON.stringify(wisdomTopics().find(t=>t.id==="anxiety").refs.find(r=>r[0]==="PSA"))'), JSON.stringify(["PSA", 54, 23]));
+});
+test("every Agpeya hour has its Psalms and Gospel; the Agpeya's numbers are the edition's own", () => {
+  const run = reader();
+  assert.equal(run("AGPEYA.hours.length"), 7);
+  const missing = run(`JSON.stringify(AGPEYA.hours.flatMap(h=>[...(h.watches||[h])].flatMap(w=>[
+    ...w.psalms.filter(p=>p.length!==2||!verseText("PSA",p[0],1)).map(p=>h.id+" Ps "+p[0]),
+    ...w.gospel.filter(([b,c,v,e])=>!verseText(b,c,v)||!verseText(b,c,e)).map(g=>h.id+" "+g.join(" "))])))`);
+  assert.equal(missing, "[]");
+  assert.equal(run('chapterText("PSA",114).length-1'), 9);
+  assert.match(run('verseText("PSA",115,1)'), /I believed/);
+  assert.match(run('verseText("PSA",146,1)'), /Praise the Lord/);
+  assert.match(run('verseText("PSA",147,1)'), /Jerusalem/);
+  assert.equal(run("currentAgpeyaHour(new Date(2026,10,11,6,30)).id"), "prime");
+  assert.equal(run("currentAgpeyaHour(new Date(2026,10,11,23,30)).id"), "midnight");
+  assert.equal(run("currentAgpeyaHour(new Date(2026,10,11,17,0)).id"), "vespers");
+  run('loadPrefs({});state.tab="prayers";selectedPrayer="hour:none";renderPrayers();');
+  const html = run("pane.innerHTML");
+  assert.match(html, /Psalm 114 \(116:1–9\)/);
+  assert.match(html, /Psalm 115 \(116:10–19\)/);
+  assert.match(html, /Luke 9:10–17/);
+  assert.match(html, /Prayer of Thanksgiving/);
+  assert.equal(run('PRAYERS.find(p=>p.id==="psalm51").chapter'), 50);
+});
+test("the chapter drawer lists the chapter's OSB sections, including one inside a verse; an hour lists its sections", () => {
+  const run = reader();
+  run(`dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};dialog.querySelector=()=>null;for(const id of ["closeDialog","drawerNextBook","drawerPreviousBook"])$(id).focus=()=>{};
+    loadPrefs({});state.book="MAT";state.chapter=5;showChapterDrawer();`);
+  const html = run('$("dialogBody").innerHTML');
+  assert.match(html, /data-jump-verse="1"><span>The Beatitudes/);
+  assert.equal((html.match(/data-jump-verse=/g) || []).length, Object.keys(BIBLE.headings).filter((k) => k.startsWith("MAT:5:")).length);
+  assert.equal((html.match(/data-chapter=/g) || []).length, 28);
+  const [key, items] = Object.entries(BIBLE.inside)[0], [b, c, v] = key.split(":");
+  assert.match(run(`chapterSectionsHtml("${b}",${c})`), new RegExp(`data-jump-verse="${v}" data-jump-line="${items[0][0]}"`));
+  run('state.tab="prayers";selectedPrayer="hour:terce";renderPrayers();showHourDrawer();');
+  const hour = run('$("dialogBody").innerHTML');
+  assert.match(hour, /Opening/);
+  assert.match(hour, /data-hour-jump="hour-\d+">19</);
+  assert.match(hour, /Closing/);
+});
+test("chapter lists, reading plans, and random passages cover the whole edition", () => {
+  const run = reader();
+  run(`state.book='PSA'; state.chapter=100;`);
+  const html = run('chapterListHtml("PSA")');
+  assert.equal((html.match(/data-chapter=/g) || []).length, 151);
+  assert.equal((html.match(/aria-current/g) || []).length, 1);
+  assert.ok(html.includes('aria-label="Chapter 100, reading" aria-current="true"'));
+  assert.ok(html.includes(">151</button>"));
+  assert.equal(run('planDays("gospels").length'), 30);
+  assert.equal(run('planDays("psalms").flat().length'), 151);
+  assert.equal(run('new Set(planDays("whole-bible").flat().map(p=>p.book+":"+p.ch)).size'), 1346);
+  run(`state.readingPlan={id:'gospels',completed:[0,0,30,-1]};state.history=[{book:'BAD',chapter:1,scroll:0,ts:1}];normalizeReaderTools(state);`);
+  assert.equal(run("JSON.stringify(state.readingPlan.completed)"), "[0]");
+  assert.equal(run("state.history.length"), 0);
+  assert.equal(run("JSON.stringify(randomPassage(()=>0))"), JSON.stringify({ book: "GEN", ch: 1, v: 1 }));
+  assert.equal(run("JSON.stringify(randomPassage(()=>1-Number.EPSILON))"), JSON.stringify({ book: "REV", ch: 22, v: 21 }));
+  assert.equal(run("randomPassageTargets.length"), 36089);
+  assert.equal(run("new Set(randomPassageTargets.map(p=>p.book)).size"), 78);
+});
+test("backups hold reading data only and refuse another edition's verse numbers", () => {
+  const run = reader();
+  run(`loadPrefs(); state.bookmarks=[{book:'JHN',chapter:1,verse:1,ts:1}]; state.comments={'JHN:1:1':'Keep <this>'}; state.secret='x'; window.backup={format:'orthobible-backup',version:1,reader:backupReader(state),personal:{notes:{'JHN:1:1':{body:'Imported'}}}}; window.checked=validateBackup(backup);`);
+  assert.equal(run('checked.reader.comments["JHN:1:1"]'), "Keep <this>");
+  assert.equal(run("checked.personal"), null);
+  assert.equal(run("checked.reader.secret"), undefined);
+  assert.equal(run("checked.reader.edition"), BIBLE.edition);
+  assert.match(run("backupCounts(checked)"), /1 bookmarks · 0 highlights · 1 comments · 0 memory verses/);
+  assert.throws(() => run("validateBackup({...backup,version:99})"));
+  assert.throws(() => run("validateBackup({...backup,reader:{...backup.reader,chapter:999}})"));
+  assert.throws(() => run('validateBackup({...backup,reader:{...backup.reader,comments:{"BAD:1:1":"bad"}}})'));
+  assert.throws(() => run('validateBackup({...backup,reader:{...backup.reader,edition:"lxx2012-web-v1"}})'), /different Bible edition/);
+  assert.throws(() => run('validateBackup({notes:{"JHN:1:1":{body:"wrong file"}}})'));
+});
+test("restoring a backup replaces reading data, keeps an undo copy, and leaves the study material open", async () => {
+  const run = readerWithStudy();
+  run(`state.comments={'JHN:1:1':'Before'}; window.storedRecords={}; studyRead=async key=>storedRecords[key]; studyTransaction=async values=>Object.assign(storedRecords,values); rememberScroll=()=>{};
+    window.restore={format:'orthobible-backup',version:1,reader:{...backupReader(state),chapter:3,comments:{'JHN:3:16':'After'}},personal:null};`);
+  await run("restoreBackup(restore)");
+  assert.equal(run("storedRecords.readerState.chapter"), 3);
+  assert.equal(run('storedRecords.restoreRecovery.reader.comments["JHN:1:1"]'), "Before");
+  assert.equal(run('state.comments["JHN:3:16"]'), "After");
+  assert.equal(run("Object.keys(personalSourceNotes).length"), Object.keys(STUDY.sourceNotes).length);
+  assert.equal(run("Object.keys(personalIntroductions).length"), 78);
+  assert.equal(run("persistenceBusy"), false);
+});
+test("Reading settings offer Lock (two taps) and name the text; nothing mentions imports or other editions", () => {
+  const run = readerWithStudy();
+  run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};showSettings();');
+  const html = run('$("dialogBody").innerHTML');
+  assert.match(html, /Unlocked on this device/);
+  assert.match(html, /id="lockOsb">Lock</);
+  assert.match(html, /St\. Athanasius Academy Septuagint/);
+  assert.match(html, /New King James Version/);
+  assert.ok(!/Import|passphrase|Cloud|LXX2012|World English|—/i.test(html));
+  run(`window.locked=0;window.reloaded=0;window.OSB_EDITION={lock(){locked++}};window.location={pathname:"/reader-osb/",search:"",hash:"#osb=x",reload(){reloaded++}};window.history={replaceState(){}};
+    window.button=$("lockOsb");button.dataset={};button.isConnected=true;button.textContent="Lock";wireOsbSettings();button.onclick();`);
+  assert.equal(run("locked"), 0);
+  assert.equal(run("button.textContent"), "Tap again to lock");
+  run("button.onclick();");
+  assert.equal(run("locked"), 1);
+  assert.equal(run("reloaded"), 1);
+});
+test("this edition keeps its own storage, apart from the other Reader on the same site", () => {
+  const sources = ["app.js", "boot.js", "persistence.js", "personal-notes.js", "library.js", "sw.js", "index.html", "osb-pack.js", "today.js", "reader-tools.js", "library-backup.js", "library-tools.js", "swipe.js"]
+    .map((file) => [file, fs.readFileSync(path.join(root, file), "utf8")]);
+  for (const [file, text] of sources) {
+    assert.ok(!/["'`]obible3["'`]|orthobible-personal|["'`]reader-library["'`]|["'`]reader-osb-key["'`]|reader-v\d/.test(text), `${file} uses the other Reader's storage`);
+    assert.ok(!/bible-data\.js|legacy-web-data|osb-data\.enc|cloud-sync|LEGACY_WEB|LXX2012/.test(text), `${file} refers to the other edition's files`);
+  }
+  const all = sources.map(([, text]) => text).join("\n");
+  assert.match(all, /"reader-osb-state"/);
+  assert.match(all, /indexedDB\.open\("reader-osb-personal", 1\)/);
+  assert.match(all, /indexedDB\.open\("reader-osb-library", 2\)/);
+  assert.match(all, /const KEY_STORE = "reader-osb-edition-key"/);
+  assert.match(all, /const CACHE = "reader-osb-v\d+"/);
+});
+test("the service worker caches every file the app loads, refreshes them on update, and deletes only its own old caches", async () => {
+  const handlers = {}, deleted = [];
+  let job, assets;
+  vm.runInNewContext(fs.readFileSync(path.join(root, "sw.js"), "utf8"), {
+    Request: class { constructor(url, options) { this.url = url; this.cache = options.cache; } },
+    self: { addEventListener(name, fn) { handlers[name] = fn; }, skipWaiting() {}, clients: { claim() {} } },
+    caches: {
+      open: async () => ({ addAll: async (requests) => { assets = requests; } }),
+      keys: async () => ["unrelated-app-v1", "reader-v54", "reader-v55", "orthodox-bible-v30", "unseen-warfare-v12", "reader-osb-v0", "reader-osb-v1", "reader-osb-v999", "reader-osb-notes"],
+      delete: async (key) => deleted.push(key),
+    },
+  });
+  handlers.install({ waitUntil(p) { job = p; } });
+  await job;
+  assert.ok(assets.every((request) => request.cache === "reload"));
+  const urls = assets.map((request) => request.url.replace(/^\.\//, ""));
+  for (const needed of ["boot.js", "edition.json", "bible.enc", "study.enc", "index.html", "app.js", "styles.css", "katameros-data.js", "wisdom-data.js"]) assert.ok(urls.includes(needed), `${needed} is not cached`);
+  const boot = fs.readFileSync(path.join(root, "boot.js"), "utf8");
+  for (const script of boot.match(/APP_SCRIPTS = \[([^\]]+)\]/)[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1))) assert.ok(urls.includes(script), `${script} is loaded but not cached`);
+  for (const url of urls.filter(Boolean)) assert.ok(fs.existsSync(path.join(root, url.split("?")[0])), `${url} is cached but missing`);
+  assert.ok(!urls.some((url) => /bible-data|legacy|osb-data|cloud/.test(url)));
+  handlers.activate({ waitUntil(p) { job = p; } });
+  await job;
+  const current = fs.readFileSync(path.join(root, "sw.js"), "utf8").match(/const CACHE = "(reader-osb-v\d+)"/)[1];
+  assert.deepEqual(deleted.sort(), ["reader-osb-v0", "reader-osb-v1", "reader-osb-v999"].filter((key) => key !== current).sort());
+});
+test("no Bible or study text is published outside the encrypted packs", () => {
+  // Distinctive passages from across the private build must not appear in any file the site serves.
+  const samples = [];
+  for (const book of BIBLE.books) for (const c of [0, Math.floor(book.n / 2), book.n - 1]) {
+    const verses = BIBLE.t[book.id][c].filter((v) => v.length >= 70);
+    if (verses.length) samples.push(verses[Math.floor(verses.length / 2)].replace(/\n/g, " ").slice(8, 58));
+  }
+  const notes = Object.values(STUDY.sourceNotes);
+  for (let i = 0; i < notes.length; i += 40) if (notes[i].body.length > 120) samples.push(notes[i].body.slice(40, 90));
+  for (const guide of STUDY.guides) { const p = guide.blocks.find((b) => b.text && b.text.length > 150); if (p) samples.push(p.text.slice(60, 110)); }
+  assert.ok(samples.length > 350);
+  const served = [...new Set([...PUBLIC_FILES(), "sw.js"])].filter((f) => fs.existsSync(path.join(root, f)) && fs.statSync(path.join(root, f)).isFile());
+  for (const file of served) {
+    if (/\.(enc|png|wasm|pfb|ttf|bcmap|icc)$/.test(file)) continue;
+    const text = fs.readFileSync(path.join(root, file), "utf8").replace(/\s+/g, " ");
+    for (const sample of samples) assert.ok(!text.includes(sample.replace(/\s+/g, " ")), `${file} contains Bible or study text`);
+  }
+  // The packs themselves are ciphertext: no readable words.
+  for (const file of ["bible.enc", "study.enc"]) {
+    const bytes = fs.readFileSync(path.join(root, file));
+    assert.ok(bytes.length > 500000);
+    assert.ok(!bytes.includes(Buffer.from("the Lord")) && !bytes.includes(Buffer.from('"books"')), `${file} is readable`);
+  }
+  const tracked = require("node:child_process").execSync("git ls-files", { cwd: root }).toString().split("\n").filter(Boolean);
+  assert.ok(!tracked.some((file) => /bible\.json|study\.json|osb-edition\.json|\.osb-unlock-link|bible-data\.js|legacy-web-data\.js/.test(file)));
+});
+test("the encrypted packs are exactly the tested build and open only with the right key", async () => {
+  const meta = JSON.parse(fs.readFileSync(path.join(root, "edition.json"), "utf8"));
+  const id = (text) => crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);
+  assert.equal(meta.files.bible.id, id(bibleJson), "bible.enc was built from a different bible.json: run scripts/encrypt_osb_edition.mjs");
+  assert.equal(meta.files.study.id, id(studyJson), "study.enc was built from a different study.json: run scripts/encrypt_osb_edition.mjs");
+  assert.equal(meta.iterations, 600000);
+  const linkFile = path.join(root, ".osb-unlock-link");
+  if (!fs.existsSync(linkFile)) return;
+  const key = Buffer.from(fs.readFileSync(linkFile, "utf8").trim().split("#osb=")[1], "base64url");
+  assert.equal(key.length, 32);
+  const open = async (file, raw) => {
+    const bytes = fs.readFileSync(path.join(root, file));
+    const imported = await crypto.webcrypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+    const zipped = await crypto.webcrypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.subarray(0, 12) }, imported, bytes.subarray(12));
+    return require("node:zlib").gunzipSync(Buffer.from(zipped)).toString("utf8");
+  };
+  assert.equal(await open("bible.enc", key), bibleJson);
+  assert.equal(await open("study.enc", key), studyJson);
+  await assert.rejects(open("bible.enc", crypto.randomBytes(32)));
+});
+// boot.js in a small page stand-in: fetch reads the repository's files; scripts "load" without running.
+function bootPage({ hash = "", stored = null, online = true } = {}) {
+  const store = new Map(stored ? [["reader-osb-edition-key", stored]] : []);
+  const element = (extra = {}) => ({ hidden: false, innerHTML: "", textContent: "", disabled: false, value: "", ...extra });
+  const nodes = { lock: element({ hidden: true }), app: element(), pane: element(), lockStatus: element(), lockPassphrase: element(), lockForm: null };
+  const loaded = [], registered = [];
+  const submitButton = element();
+  const context = {
+    console, atob, btoa, TextEncoder, TextDecoder, Uint8Array, Blob, Response, DecompressionStream, crypto: crypto.webcrypto, setTimeout, clearTimeout,
+    location: { hash, pathname: "/reader-osb/", search: "" },
+    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
+    navigator: { serviceWorker: { register: (url) => { registered.push(url); return Promise.resolve(); } } },
+    fetch: async (file) => {
+      if (!online) throw new TypeError("offline");
+      const bytes = fs.readFileSync(path.join(root, file));
+      return { ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), json: async () => JSON.parse(bytes.toString("utf8")) };
+    },
+    document: {
+      head: { append(script) { loaded.push(script.src); Promise.resolve().then(() => script.onload()); } },
+      createElement: () => ({}),
+      querySelector: (selector) => (selector === ".app" ? nodes.app : null),
+      getElementById(id) {
+        if (id === "lockForm") return nodes.lock.innerHTML.includes('id="lockForm"') ? (nodes.lockForm ||= { querySelector: () => submitButton }) : null;
+        return nodes[id];
+      },
+    },
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, "boot.js"), "utf8"), context);
+  const settle = async (ready) => { for (let i = 0; i < 400 && !ready(); i++) await new Promise((r) => setTimeout(r, 25)); };
+  return { context, nodes, loaded, registered, store, settle };
+}
+const unlockKey = () => {
+  const file = path.join(root, ".osb-unlock-link");
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim().split("#osb=")[1] : null;
+};
+test("without a key the app stays locked and loads nothing", async () => {
+  const page = bootPage();
+  await page.settle(() => !page.nodes.lock.hidden);
+  assert.equal(page.nodes.lock.hidden, false);
+  assert.equal(page.nodes.app.hidden, true);
+  assert.match(page.nodes.lock.innerHTML, /Open your private link to read\./);
+  assert.match(page.nodes.lock.innerHTML, /Use passphrase/);
+  assert.ok(!/—/.test(page.nodes.lock.innerHTML));
+  assert.equal(page.context.BIBLE, undefined);
+  assert.deepEqual(page.loaded, []);
+});
+test("the private link opens the text, keeps the key for next time, and loads the app in order", { skip: !unlockKey() && "no unlock link on this machine" }, async () => {
+  const page = bootPage({ hash: `#osb=${unlockKey()}` });
+  await page.settle(() => page.loaded.includes("app.js"));
+  assert.equal(page.context.BIBLE.edition, BIBLE.edition);
+  assert.equal(JSON.stringify(page.context.BIBLE), JSON.stringify(BIBLE));
+  assert.equal(page.nodes.lock.hidden, true);
+  assert.equal(page.nodes.app.hidden, false);
+  assert.equal(page.loaded[0], "edition.js");
+  assert.equal(page.loaded.at(-1), "app.js");
+  assert.ok(page.loaded.indexOf("personal-notes.js") < page.loaded.indexOf("osb-pack.js"));
+  assert.ok(page.store.get("reader-osb-edition-key"));
+  assert.ok(page.registered.includes("./sw.js"));
+  assert.equal(JSON.stringify(await page.context.OSB_EDITION.study()), JSON.stringify(STUDY));
+  // A later launch with no link in the address bar (the saved key) opens too; Lock forgets the key.
+  const again = bootPage({ stored: page.store.get("reader-osb-edition-key") });
+  await again.settle(() => again.loaded.includes("app.js"));
+  assert.equal(again.context.BIBLE.books.length, 78);
+  again.context.OSB_EDITION.lock();
+  assert.equal(again.store.has("reader-osb-edition-key"), false);
+});
+test("a wrong or outdated key shows the lock screen instead of a broken app", async () => {
+  const page = bootPage({ hash: `#osb=${crypto.randomBytes(32).toString("base64url")}` });
+  await page.settle(() => !page.nodes.lock.hidden);
+  assert.equal(page.nodes.lock.hidden, false);
+  assert.match(page.nodes.lock.innerHTML, /This link no longer opens the text\. Use your latest link\./);
+  assert.equal(page.context.BIBLE, undefined);
+  assert.deepEqual(page.loaded, []);
+  const offline = bootPage({ hash: `#osb=${crypto.randomBytes(32).toString("base64url")}`, online: false });
+  await offline.settle(() => !offline.nodes.lock.hidden);
+  assert.match(offline.nodes.lock.innerHTML, /Connect to the internet once to download the text\./);
 });

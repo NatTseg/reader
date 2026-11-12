@@ -43,7 +43,7 @@ NT = set("MAT MRK LUK JHN ACT ROM 1CO 2CO GAL EPH PHP COL 1TH 2TH 1TI 2TI TIT PH
 report = {}
 
 # ---------- 1. Bible text ----------
-books, text, labels, preface, headings, inside = [], {}, {}, {}, {}, {}
+books, text, labels, preface, headings, inside, layout, marks, italics, parallels = [], {}, {}, {}, {}, {}, {}, {}, {}, {}
 for b in E["order"]:
     chapters = E["books"][b]
     name = E["names"][b]
@@ -60,7 +60,15 @@ for b in E["order"]:
             headings[f"{b}:{ci + 1}:{pos}"] = hs
         for pos, items in ch["inside"].items():
             inside[f"{b}:{ci + 1}:{pos}"] = items
-bible = {"edition": EDITION, "books": books, "t": text, "labels": labels, "preface": preface, "headings": headings, "inside": inside,
+        for pos, codes in ch.get("layout", {}).items():
+            layout[f"{b}:{ci + 1}:{pos}"] = codes
+        for pos, letters in ch.get("marks", {}).items():
+            marks[f"{b}:{ci + 1}:{pos}"] = letters
+        for pos, ranges in ch.get("italics", {}).items():
+            italics[f"{b}:{ci + 1}:{pos}"] = ranges
+        for pos, line in ch.get("parallels", {}).items():
+            parallels[f"{b}:{ci + 1}:{pos}"] = line
+bible = {"edition": EDITION, "books": books, "t": text, "labels": labels, "preface": preface, "headings": headings, "inside": inside, "layout": layout, "marks": marks, "italics": italics, "titles": E.get("chapterTitles", {}), "parallels": parallels,
          "spans": {}, "sources": {"ot": "St. Athanasius Academy Septuagint (Orthodox Study Bible)", "nt": "New King James Version (Orthodox Study Bible)"}}
 (build / "bible.json").write_text(json.dumps(bible, ensure_ascii=False, separators=(",", ":")))
 report["bible"] = {"books": len(books), "chapters": sum(b["n"] for b in books), "verses": sum(len(c) - 1 for t in text.values() for c in t),
@@ -68,21 +76,37 @@ report["bible"] = {"books": len(books), "chapters": sum(b["n"] for b in books), 
                    "labelledChapters": len(labels)}
 
 # ---------- 2. Study pack: notes on their own verses, introductions, guides, articles ----------
-notes = {key: {"kind": "OSB note", "title": key, "body": body, "sourceVerse": "", "see": []} for key, body in E["notes"].items()}
+# A verse's notes in the order the OSB prints them (the note, then any note on its liturgical use).
+notes = {key: {"kind": "OSB note", "title": key, "body": "\n\n".join(parts), "sourceVerse": "", "see": []} for key, parts in E["notes"].items()}
 ids = {b["id"] for b in books}
-introductions = {b: article for b, article in earlier.get("introductions", {}).items() if b in ids}
-for extra in ("SUS", "BEL"):
-    if extra not in introductions and "DAN" in introductions:
-        introductions[extra] = introductions["DAN"]
-guides = list(earlier.get("guides", []))
+STRAY = re.compile(r" (?=[,;:!?)])|(?<![. ]) (?=\.(?![ ]?\.))|(?<=\() ")  # the same rule as extract_osb_edition.tidy
+
+
+def tidy_article(article):
+    blocks = []
+    for block in article["blocks"]:
+        block = dict(block)
+        if isinstance(block.get("text"), str):
+            block["text"] = STRAY.sub("", block["text"])
+        if isinstance(block.get("rows"), list):
+            block["rows"] = [[STRAY.sub("", cell) for cell in row] for row in block["rows"]]
+        blocks.append(block)
+    return {**article, "blocks": blocks}
+
+
+# Introductions come straight from the ebook. The reading guides (front and back matter) come from the earlier
+# private extraction; every paragraph of them is checked against the ebook in the tests.
+introductions = {b: article for b, article in E["introductions"].items() if b in ids}
+guides = [tidy_article(g) for g in earlier.get("guides", [])]
 for article in E["articles"]:
-    guides.append({"title": article["title"], "group": "Study articles", "blocks": article["blocks"]})
+    guides.append({"title": article["title"], "group": "Study articles", "after": article["after"], "blocks": article["blocks"]})
 study = {"version": 3, "edition": EDITION, "source": "Orthodox Study Bible (personal copy)", "notes": {}, "preambles": {},
-         "introductions": introductions, "guides": guides, "sourceNotes": notes,
+         "introductions": introductions, "guides": guides, "sourceNotes": notes, "textNotes": E.get("textNotes", {}),
          "alignment": {"edition": EDITION, "version": 1, "notes": {k: k for k in notes}, "verses": {}, "evidence": {}, "candidates": {}}}
 (build / "study.json").write_text(json.dumps(study, ensure_ascii=False, separators=(",", ":")))
 missing_notes = [k for k in notes if not maps.exists(*[k.split(":")[0], int(k.split(":")[1]), int(k.split(":")[2])])]
 report["study"] = {"notes": len(notes), "notesOnMissingVerses": len(missing_notes), "introductions": len(introductions),
+                   "translatorsNotes": sum(len(v) for v in E.get("textNotes", {}).values()), "lettersInText": sum(len(v) for v in marks.values()),
                    "booksWithoutIntroduction": sorted(ids - set(introductions)), "guides": len(earlier.get("guides", [])), "articles": len(E["articles"])}
 
 # ---------- 3. Reference maps ----------
@@ -97,8 +121,9 @@ def verse_text(source, chapter, verse):
 
 
 def english_psalm(chapter, verse):
-    """English Psalm verse -> OSB. Three witnesses: the verse-offset rule (via LXX2012) and direct text alignment
-    of the lectionary's English Bible and of the WEB. The rule wins unless a text match is clearly better."""
+    """English Psalm verse -> OSB, by the numbering rule (chapter shift, then the Psalm's verse offset).
+    The direct text alignments of the lectionary's English Bible and of the WEB are witnesses: they are counted,
+    and used only where the rule has no answer."""
     source = verse_text(maps.kat, chapter, verse) or verse_text(maps.web, chapter, verse)
     rule = psalms.to_osb(chapter, verse)
     candidates = [c[:3] for c in (psalms.kat.get((chapter, verse)), psalms.web.get((chapter, verse))) if c]
@@ -108,11 +133,15 @@ def english_psalm(chapter, verse):
     score = lambda ref: psalm_corpus.sim(bag, norm, psalm_index[ref]) if ref in psalm_index else 0.0
     best = max(candidates, key=score, default=None)
     agreement["psalm witnesses agree" if best == rule else "psalm witnesses differ"] += 1
-    if rule and (best is None or score(best) - score(rule) <= 0.15):
+    if best != rule:
+        psalm_differences.append((chapter, verse, list(rule[1:]) if rule else None, list(best[1:]) if best else None,
+                                  round(score(rule), 2) if rule else None, round(score(best), 2) if best else None))
+    if rule:
         return rule, score(rule)
     return best, score(best)
 
 
+psalm_differences = []
 agreement = Counter()
 
 
@@ -328,7 +357,8 @@ data = {"source": "Coptic Orthodox Katameros via the open-source Katameros proje
         "edition": EDITION, "from": keys[0], "to": keys[-1], "sets": sets, "days": days, "synaxarium": synaxarium}
 (root / "katameros-data.js").write_text("// Generated by scripts/build_osb_edition.py. Do not edit by hand.\nwindow.KATAMEROS=" + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
 report["katameros"] = {"days": len(days), "sets": len(sets), "versesChecked": dict(checked), "unmapped": sorted(set(unmapped))[:20],
-                       "unmappedCount": len(set(unmapped)), "weakMatches": len(set(weak)), "psalmWitnesses": dict(agreement),
+                       "unmappedCount": len(set(unmapped)), "weakMatches": len(set(weak)), "psalmWitnesses": dict(agreement), "psalmRuleCorrections": {f"{e}->{oc}": k for (e, oc), k in psalms.shift.items()},
+                       "psalmDifferences": sorted(set(map(tuple, map(lambda d: (d[0], d[1], tuple(d[2] or ()), tuple(d[3] or ()), d[4], d[5]), psalm_differences)))),
                        "chapterBreaksRepaired": dict(stats_split), "smoothedByNeighbours": dict(smoothed),
                        "gapsFilled": dict(filled), "endpointsDecidedByWording": sorted(set(endpoints))}
 ot_checks = {k: v for k, v in range_checks.items() if k[0] != "PSA"}
@@ -343,7 +373,7 @@ weak.clear(); checked.clear()
 
 # ---------- 5. Wisdom topics in OSB numbering ----------
 SPECIAL = {("JER", 29): 36}  # the bundled LXX2012 keeps the Septuagint chapter order in Jeremiah
-wisdom, lost = [], []
+wisdom, lost, wisdom_psalms = [], [], Counter()
 for label, topics in wisdom_topics.CATEGORIES:
     category = {"label": label, "topics": []}
     for tid, title, tags, refs in topics:
@@ -357,9 +387,18 @@ for label, topics in wisdom_topics.CATEGORIES:
             if any(r is None for r in mapped):
                 lost.append(ref)
                 continue
-            if book not in NT:
-                src = maps.lxx if book != "PSA" else None
-                words = set(tokens(" ".join((src[book][ch - 1][v] if src else source_text(book, ch, v)) for v in range(start, end + 1))))
+            if book == "PSA":
+                # Psalm verses follow the numbering rule (checked across the whole Psalter by three witnesses);
+                # the Septuagint's wording is often too different from the English for a word comparison.
+                by_rule = [psalms.to_osb(ch, v) for v in range(start, end + 1)]
+                wisdom_psalms["verses"] += len(mapped)
+                wisdom_psalms["by the numbering rule"] += sum(1 for a, b in zip(mapped, by_rule) if a == b)
+                if mapped != by_rule:
+                    lost.append(f"{ref} (differs from the Psalm numbering rule)")
+                    continue
+            elif book not in NT:
+                # A verse the Septuagint does not have (1 Kingdoms 18:1-5, Lamentations 3:22-24) has no counterpart.
+                words = set(tokens(" ".join(maps.lxx[book][ch - 1][v] for v in range(start, end + 1))))
                 found = set(tokens(" ".join(maps.text(r) for r in dict.fromkeys(mapped))))
                 overlap = len(words & found) / max(1, min(len(words), len(found)))
                 if overlap < 0.3:
@@ -387,6 +426,6 @@ for c in wisdom:
 lines.append("]};")
 (root / "wisdom-data.js").write_text("\n".join(lines) + "\n")
 report["wisdom"] = {"topics": sum(len(c["topics"]) for c in wisdom), "refs": sum(len(t["refs"]) for c in wisdom for t in c["topics"]),
-                    "versesChecked": dict(checked), "lost": lost, "weakMatches": len(set(weak))}
+                    "versesChecked": dict(checked), "lost": lost, "psalmVerses": dict(wisdom_psalms), "weakMatches": len(set(weak))}
 (build / "weak-matches.json").write_text(json.dumps({"katameros": katameros_weak, "wisdom": sorted(set(weak))}))
 print(json.dumps(report, indent=1))

@@ -10,40 +10,19 @@
     <meta name="color-scheme" content="light" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="reader" />
+    <meta name="apple-mobile-web-app-title" content="Reader OSB" />
     <script>
-      try { const saved = JSON.parse(localStorage.getItem("obible3") || "{}"); const theme = saved.theme === "light" && saved.paper === "warm" ? "sepia" : saved.theme; if (["sepia", "dark", "night"].includes(theme)) document.documentElement.dataset.theme = theme; } catch {}
+      try { const saved = JSON.parse(localStorage.getItem("reader-osb-state") || "{}"); const theme = saved.theme === "light" && saved.paper === "warm" ? "sepia" : saved.theme; if (["sepia", "dark", "night"].includes(theme)) document.documentElement.dataset.theme = theme; } catch {}
     </script>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg?v=41" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png?v=41" />
     <link rel="stylesheet" href="styles.css" />
-    <title>Reader</title>
-    <script src="bible-data.js" defer></script>
-    <script src="legacy-web-data.js" defer></script>
-    <script src="edition.js" defer></script>
-    <script src="study-data.js" defer></script>
-    <script src="wisdom-data.js" defer></script>
-    <script src="prayers-data.js" defer></script>
-    <script src="agpeya-data.js" defer></script>
-    <script src="personal-notes.js" defer></script>
-    <script src="persistence.js" defer></script>
-    <script src="cloud-config.js" defer></script>
-    <script src="cloud-sync.js" defer></script>
-    <script src="note-alignment.js" defer></script>
-    <script src="osb-pack.js" defer></script>
-    <script src="reader-tools.js" defer></script>
-    <script src="katameros-data.js" defer></script>
-    <script src="today.js" defer></script>
-    <script src="vendor/fflate/fflate.js" defer></script>
-    <script src="library-formats.js" defer></script>
-    <script src="library.js" defer></script>
-    <script src="library-tools.js" defer></script>
-    <script src="library-backup.js" defer></script>
-    <script src="swipe.js" defer></script>
-    <script src="app.js" defer></script>
+    <title>Reader · OSB</title>
+    <script src="boot.js" defer></script>
   </head>
   <body>
+    <div id="lock" class="lock" hidden></div>
     <div class="app">
       <header class="header">
         <a

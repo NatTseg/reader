@@ -10,7 +10,7 @@ let libraryBooks = [], libraryLoading = true, libraryError = "", libraryBusy = f
 let activeLibraryPdf = null, pdfRendererPromise, librarySaveQueue = Promise.resolve(), libraryOpenVersion = 0;
 function libraryDatabase() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("reader-library", 2);
+    const request = indexedDB.open("reader-osb-library", 2);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains("catalog")) request.result.createObjectStore("catalog", {keyPath: "id"});
       if (!request.result.objectStoreNames.contains("files")) request.result.createObjectStore("files");

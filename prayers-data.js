@@ -1,4 +1,4 @@
-// Traditional prayers retained from the original prayer collection; Psalm text uses the bundled Septuagint (LXX2012).
+// Traditional prayers retained from the original prayer collection; Psalm text comes from this app's Orthodox Study Bible.
 window.PRAYERS = [
   {
     id: "lords-prayer",

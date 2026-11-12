@@ -1347,3 +1347,38 @@ dialog.text-sheet { max-height: 80dvh; }
 .note-relink { font-size: 14px; margin-top: 4px; }
 dialog.note-sheet:has(.link-review) { max-height: 88dvh; }
 .link-actions { position: sticky; bottom: 0; padding: 10px 0 calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
+
+/* OSB text edition: lock screen */
+.lock { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; background: var(--bg); color: var(--text); }
+.lock[hidden] { display: none; }
+.lock img { border-radius: 16px; }
+.lock h1 { margin: 12px 0 0; font: 600 30px Georgia, serif; }
+.lock p { margin: 4px 0; color: var(--muted); }
+.lock details { margin-top: 14px; }
+.lock summary { cursor: pointer; color: var(--muted); font-size: 14px; list-style: none; }
+.lock summary::-webkit-details-marker { display: none; }
+.lock form { display: flex; gap: 8px; margin-top: 10px; }
+.lock input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); }
+.lock button { padding: 10px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--bg); font-weight: 600; }
+
+/* OSB text edition: verses printed on several lines, and text before a chapter's first verse */
+.verse-lines { display: block; }
+.vl, .vp { display: block; }
+.vl { padding-left: 1.2em; text-indent: -1.2em; }
+.vl .note-link, .vl .nw { text-indent: 0; }
+.vp + .vp, .vl + .vp, .vp + .vl, .vl.stanza { margin-top: .4em; }
+.verse-lines .osb-heading { margin: 1.1em 0 .4em; text-indent: 0; }
+.verse.stanza { margin-top: 26px; }
+.verses > .verse.stanza:first-child, .osb-heading + .verse.stanza, .chapter-preface + .verse.stanza { margin-top: 0; }
+.nw { white-space: nowrap; }
+.chapter-preface { margin: 0 0 12px; padding: 1px 6px 1px 36px; font-style: italic; }
+/* Translators' notes (New Testament): a small letter in the text, and the note with its letter */
+.tn { position: relative; font: italic 600 .56em/1 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--muted); vertical-align: .75em; padding: 0 1px; cursor: pointer; text-indent: 0; }
+.tn::after { content: ""; position: absolute; inset: -12px -8px; }
+.tn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.text-note { margin: .55em 0 0; }
+.text-note sup { color: var(--muted); font: italic 600 .72em/1 -apple-system, BlinkMacSystemFont, sans-serif; margin-right: 3px; }
+.note-sheet .text-note { font-family: var(--reading-font, Georgia, serif); }
+.note-body + .text-notes { margin-top: 1em; padding-top: .35em; border-top: 1px solid var(--line); }
+.osb-parallel { margin: -.25em 0 .8em; color: var(--muted); font: italic calc(var(--fs) * .68)/1.4 var(--reading-font, Georgia, serif); }
+.osb-parallel + .verse.stanza { margin-top: 0; }

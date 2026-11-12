@@ -1,7 +1,6 @@
 // The Agpeya (Coptic Book of Hours): each hour's Psalms (Coptic/Septuagint numbering) and readings,
-// following copticchurch.net/liturgy/agpeya. Text comes from this app's LXX2012 and WEB.
-// psalm: [Agpeya number, English number label, chapter in this edition, first verse, last verse].
-// The Agpeya's Psalms 114 and 115 are English Psalm 116, which this edition prints as Psalm 115.
+// following copticchurch.net/liturgy/agpeya. Text comes from this app's Orthodox Study Bible, whose Psalm
+// numbers are the Agpeya's own. psalm: [Agpeya number, English number label].
 window.AGPEYA = {
   opening: ["lords-prayer", "thanksgiving", "psalm51"],
   closing: ["kyrie", "trisagion", "glory", "theotokos", "lords-prayer"],
@@ -17,7 +16,7 @@ window.AGPEYA = {
       psalms: [[53, "54"], [56, "57"], [60, "61"], [62, "63"], [66, "67"], [69, "70"], [83, "84"], [84, "85"], [85, "86"], [86, "87"], [90, "91"], [92, "93"]],
       gospel: [["MAT", 5, 1, 16]]},
     {id: "none", name: "None", hour: "Ninth Hour", time: "3 p.m.", from: 14, to: 16.5,
-      psalms: [[95, "96"], [96, "97"], [97, "98"], [98, "99"], [99, "100"], [100, "101"], [109, "110"], [110, "111"], [111, "112"], [112, "113"], [114, "116:1–9", 115, 1, 9], [115, "116:10–19", 115, 10, 19]],
+      psalms: [[95, "96"], [96, "97"], [97, "98"], [98, "99"], [99, "100"], [100, "101"], [109, "110"], [110, "111"], [111, "112"], [112, "113"], [114, "116:1–9"], [115, "116:10–19"]],
       gospel: [["LUK", 9, 10, 17]]},
     {id: "vespers", name: "Vespers", hour: "Eleventh Hour", time: "Sunset", from: 16.5, to: 18,
       psalms: [[116, "117"], [117, "118"], [119, "120"], [120, "121"], [121, "122"], [122, "123"], [123, "124"], [124, "125"], [125, "126"], [126, "127"], [127, "128"], [128, "129"]],

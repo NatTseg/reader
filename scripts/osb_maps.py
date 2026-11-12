@@ -113,10 +113,10 @@ class PsalmMap:
         self.offset = {key: Counter(offs).most_common(1)[0][0] for key, offs in groups.items()}
         self.web = maps.align("web", "PSA", ["PSA"])
         self.kat = maps.align("kat", "PSA", ["PSA"]) if "PSA" in maps.kat else {}
+        self.shift = self.direct_shifts()
 
-    def to_osb(self, chapter, verse):
-        if chapter == 151:
-            return ("PSA", 151, verse)
+    def chained(self, chapter, verse):
+        """English verse -> OSB through the bundled LXX2012 numbering."""
         c2, v2 = psalm_to_lxx2012(chapter, verse)
         hit = self.aligned.get((c2, v2))
         if not hit:
@@ -126,3 +126,50 @@ class PsalmMap:
         if not self.maps.exists("PSA", oc, pos):
             pos = hit[2]
         return ("PSA", oc, pos)
+
+    def direct_shifts(self):
+        """Where the chain through LXX2012 is off for a whole Psalm (LXX2012 divides a verse differently), the
+        English and OSB texts themselves give the verse offset: the constant shift under which the Psalm's
+        verses match best, when both English witnesses agree on it and it is clearly better."""
+        corpus = self.maps.corpus(["PSA"])
+        order = self.maps.order(["PSA"])
+
+        def score(verses, oc, k):
+            total = 0.0
+            for v, text in verses:
+                ref = ("PSA", oc, v + k)
+                if ref in order:
+                    bag, norm = corpus.query(text)
+                    total += corpus.sim(bag, norm, order[ref])
+            return total
+
+        found = {}
+        for name in ("kat", "web"):
+            source = self.maps.sources[name].get("PSA")
+            if not source:
+                continue
+            for e in range(1, min(150, len(source)) + 1):
+                segments = defaultdict(list)
+                for v in range(1, len(source[e - 1])):
+                    ref = self.chained(e, v) if source[e - 1][v] else None
+                    if ref:
+                        segments[ref[1]].append((v, source[e - 1][v], ref[2] - v))
+                for oc, items in segments.items():
+                    usual = Counter(shift for _, _, shift in items).most_common(1)[0][0]
+                    verses = [(v, text) for v, text, _ in items]
+                    best = max(range(-30, 31), key=lambda k: score(verses, oc, k))
+                    if best != usual and score(verses, oc, best) >= score(verses, oc, usual) + 1.0:
+                        found.setdefault((e, oc), set()).add((name, best))
+        witnesses = sum(1 for name in ("kat", "web") if self.maps.sources[name].get("PSA"))
+        return {key: next(iter(votes))[1] for key, votes in found.items()
+                if len(votes) == witnesses and len({k for _, k in votes}) == 1}
+
+    def to_osb(self, chapter, verse):
+        if chapter == 151:
+            return ("PSA", 151, verse)
+        ref = self.chained(chapter, verse)
+        if ref and (chapter, ref[1]) in self.shift:
+            pos = verse + self.shift[(chapter, ref[1])]
+            if self.maps.exists("PSA", ref[1], pos):
+                return ("PSA", ref[1], pos)
+        return ref
