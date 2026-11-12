@@ -174,15 +174,14 @@ function renderToday(key = todayKey || localDayKey()) {
     <button class="icon-button" data-today-shift="1" aria-label="Next day">${icon("right")}</button></div>
     ${key !== today ? `<button class="text-button today-return" data-today-shift="0">Back to today ›</button>` : ""}`;
   if (!day) {
-    html += `<p class="empty">Readings for this date are not in this version of the app yet. Update the app to get more years of the Katameros.</p></div>`;
+    html += `<p class="empty">No readings for this date.</p></div>`;
     pane.innerHTML = html; return;
   }
   const carry = verseToCarry(day);
   if (key === today && state.book && bookMeta(state.book)) html += `<button class="continue-reading" data-tab-open="bible"><small>Continue reading</small><strong>${esc(refLabel(state.book, state.chapter))}</strong><span>${Math.round((state.scroll || 0) * 100)}% ›</span></button>`;
   if (carry) html += `<section class="carry"><p class="eyebrow">Verse to carry today</p><blockquote>${esc(carry.text)}</blockquote>
     <p class="carry-ref">${esc(carry.label)}</p><div class="actions"><button class="primary" data-carry-practice="true">Practice</button>
-    <button class="secondary" data-carry-memorize="true">${(state.memory || []).some(item => item.id === memoryId(carry.passages)) ? "✓ In memory" : "Add to memory"}</button></div>
-    <p class="helper">${carry.liturgy ? "The Psalm of today's Liturgy" : "A Psalm from today's readings"}. Read it slowly, then say it from memory a few times during the day.</p></section>`;
+    <button class="secondary" data-carry-memorize="true">${(state.memory || []).some(item => item.id === memoryId(carry.passages)) ? "✓ In memory" : "Add to memory"}</button></div></section>`;
   html += planHtml(key === today);
   html += `<div class="today-stats"><span><strong>${streak}</strong> day${streak === 1 ? "" : "s"} in a row</span><button class="text-button" data-memory-review="true" ${due.length ? "" : "disabled"}>${due.length ? `Review ${due.length} memory verse${due.length === 1 ? "" : "s"} ›` : `${(state.memory || []).length} memory verses · none due`}</button></div>`;
   const done = new Set(dayDone(key));
@@ -207,8 +206,7 @@ function renderToday(key = todayKey || localDayKey()) {
   const others = day.sections.filter(section => section.title !== "Liturgy");
   if (others.length && !liturgy.length) html += others.map(section => `<h2 class="section-label">${esc(section.title)}</h2><div class="reading-list">${section.subs.map(sub => sub.readings.map((reading, i) => readingCard(section.title, sub, reading, i)).join("")).join("")}</div>`).join("");
   else if (others.length) html += `<details class="other-hours"><summary>${others.map(s => esc(s.title)).join(" & ")} readings</summary>${others.map(section => `<h3 class="section-label">${esc(section.title)}</h3><div class="reading-list">${section.subs.map(sub => sub.readings.map((reading, i) => readingCard(section.title, sub, reading, i)).join("")).join("")}</div>`).join("")}</details>`;
-  html += `<p class="helper today-source">Readings follow the Coptic Orthodox Katameros (via the open-source Katameros project). Text: ${"LXX2012 Septuagint and World English Bible"}; Psalms use Septuagint numbering.</p>
-    <label class="today-pref"><input type="checkbox" id="openTodayFirst" ${state.openTodayFirst !== false ? "checked" : ""}> Open Today first each day</label></div>`;
+  html += `    <label class="today-pref"><input type="checkbox" id="openTodayFirst" ${state.openTodayFirst !== false ? "checked" : ""}> Open Today first each day</label></div>`;
   pane.innerHTML = html;
   $("openTodayFirst").onchange = event => { state.openTodayFirst = event.target.checked; persist(); };
 }
@@ -221,7 +219,7 @@ function planHtml(isToday) {
   const read = new Set(plan.read || []);
   return `<section class="plan-card"><div class="plan-head"><p class="eyebrow">${esc(planName(plan.id))}</p><span class="plan-day">Day ${index + 1} of ${days.length}</span></div>
     <div class="plan-chapters">${day.map(p => `<button class="plan-chapter${read.has(`${p.book}:${p.ch}`) ? " is-read" : ""}" data-today-visit="${p.book}:${p.ch}:1">${read.has(`${p.book}:${p.ch}`) ? "✓ " : ""}${esc(refLabel(p.book, p.ch))}</button>`).join("")}</div>
-    <p class="helper">${plan.completed.length} of ${days.length} days complete · chapters tick off when you reach their end.</p></section>`;
+    <p class="helper">${plan.completed.length} of ${days.length} days complete</p></section>`;
 }
 function readingById(key, id) {
   const day = katamerosDay(key), [sectionTitle, subTitle, index] = id.split("|");
@@ -245,7 +243,7 @@ function toggleReadingDone(id) {
 function chooseMemoryVerse(id) {
   const passages = readingById(todayKey, id);
   if (!passages) return;
-  openDialog("Choose a verse to memorize", `<p class="helper">Tap one verse, or a verse and its neighbours, then add them.</p><div class="pick-verses">${passages.flatMap((p, pi) => p.verses.map((v, vi) => `<button class="pick-verse" data-pick="${pi}:${vi}" aria-pressed="false"><sup>${esc(v.label)}</sup> ${esc(v.text)}</button>`)).join("")}</div><div class="actions"><button class="primary" id="addPicked" disabled>Add to memory</button></div>`);
+  openDialog("Choose a verse to memorize", `<div class="pick-verses">${passages.flatMap((p, pi) => p.verses.map((v, vi) => `<button class="pick-verse" data-pick="${pi}:${vi}" aria-pressed="false"><sup>${esc(v.label)}</sup> ${esc(v.text)}</button>`)).join("")}</div><div class="actions"><button class="primary" id="addPicked" disabled>Add to memory</button></div>`);
   const picked = new Set();
   $("dialogBody").querySelectorAll("[data-pick]").forEach(button => button.onclick = () => {
     if (picked.has(button.dataset.pick)) picked.delete(button.dataset.pick); else picked.add(button.dataset.pick);
@@ -255,7 +253,7 @@ function chooseMemoryVerse(id) {
   $("addPicked").onclick = () => {
     const chosen = passages.map((p, pi) => ({...p, verses: p.verses.filter((v, vi) => picked.has(`${pi}:${vi}`))})).filter(p => p.verses.length);
     const added = addMemoryVerse(chosen); persist(); closeDialog();
-    notify(added ? `Added ${passageLabel(chosen)} to memory` : "Already in your memory verses");
+    notify(added ? "Added to memory" : "Already in memory");
     if (state.tab === "today") renderToday(todayKey);
   };
 }
@@ -266,7 +264,6 @@ function practiceHtml(text, level) {
 const PRACTICE_LEVELS = ["Read it through", "A few words hidden", "Most words hidden", "First letters only", "From memory"];
 function showPractice(label, text, level = 0) {
   openDialog(label, `<p class="eyebrow">Step ${level + 1} of 5 · ${PRACTICE_LEVELS[level]}</p><div class="practice-text">${practiceHtml(text, level)}</div>
-    <p class="helper">${level ? "Say it aloud. Tap a hidden word to peek." : "Read it slowly, aloud if you can."}</p>
     <div class="actions">${level ? '<button class="secondary" id="practiceEasier">‹ Easier</button>' : ""}${level < 4 ? '<button class="primary" id="practiceHarder">Next step ›</button>' : '<button class="primary" id="practiceDone">I can say it</button>'}<button class="text-button" id="practiceReveal">Show all</button></div>`);
   $("dialogBody").querySelectorAll("[data-reveal]").forEach(button => button.onclick = () => {
     button.firstElementChild.hidden = true; button.lastElementChild.hidden = false; button.classList.add("revealed");
@@ -274,18 +271,17 @@ function showPractice(label, text, level = 0) {
   $("practiceReveal").onclick = () => $("dialogBody").querySelectorAll("[data-reveal]").forEach(button => button.click());
   if ($("practiceEasier")) $("practiceEasier").onclick = () => showPractice(label, text, level - 1);
   if ($("practiceHarder")) $("practiceHarder").onclick = () => showPractice(label, text, level + 1);
-  if ($("practiceDone")) $("practiceDone").onclick = () => { closeDialog(); notify("Well done. Come back to it later today."); };
+  if ($("practiceDone")) $("practiceDone").onclick = () => { closeDialog(); notify("Done"); };
 }
 function showMemoryReview(queue = memoryDue().map(item => item.id), index = 0, correct = 0) {
   const item = (state.memory || []).find(entry => entry.id === queue[index]);
   if (!item) {
-    openDialog("Review complete", `<p>You reviewed ${queue.length} verse${queue.length === 1 ? "" : "s"} and remembered ${correct}.</p><p class="helper">Verses you remember come back after longer gaps: 1, 2, 4, 7, 14, 30, 60, then 120 days. Ones you miss come back tomorrow.</p><div class="actions"><button class="primary" id="reviewClose">Done</button><button class="text-button" id="reviewList">All memory verses ›</button></div>`);
+    openDialog("Review complete", `<p>You reviewed ${queue.length} verse${queue.length === 1 ? "" : "s"} and remembered ${correct}.</p><div class="actions"><button class="primary" id="reviewClose">Done</button><button class="text-button" id="reviewList">All memory verses ›</button></div>`);
     $("reviewClose").onclick = () => { closeDialog(); if (state.tab === "today") renderToday(todayKey); };
     $("reviewList").onclick = () => showMemoryList();
     return;
   }
-  openDialog(`Review ${index + 1} of ${queue.length}`, `<p class="eyebrow">${esc(item.label)}</p><div class="practice-text" id="reviewText">${practiceHtml(item.text, 3)}</div>
-    <p class="helper">Say the verse from the first letters, then check yourself.</p><div class="actions" id="reviewActions"><button class="primary" id="reviewShow">Show the verse</button></div>`);
+  openDialog(`Review ${index + 1} of ${queue.length}`, `<p class="eyebrow">${esc(item.label)}</p><div class="practice-text" id="reviewText">${practiceHtml(item.text, 3)}</div><div class="actions" id="reviewActions"><button class="primary" id="reviewShow">Show the verse</button></div>`);
   $("dialogBody").querySelectorAll("[data-reveal]").forEach(button => button.onclick = () => { button.firstElementChild.hidden = true; button.lastElementChild.hidden = false; button.classList.add("revealed"); });
   $("reviewShow").onclick = () => {
     $("reviewText").textContent = item.text;
@@ -300,7 +296,7 @@ function showMemoryList() {
   openDialog("Memory verses", items.length ? `<div class="memory-list">${items.map(item => `<article class="memory-item"><strong>${esc(item.label)}</strong><p>${esc(item.text)}</p>
     <small>${item.due <= today ? "Due today" : `Next review in ${daysBetween(today, item.due)} day${daysBetween(today, item.due) === 1 ? "" : "s"}`} · ${item.reviews || 0} reviews</small>
     <div class="actions"><button class="text-button" data-memory-practice="${esc(item.id)}">Practice</button><button class="text-button" data-memory-remove="${esc(item.id)}">Remove</button></div></article>`).join("")}</div>`
-    : '<p>No memory verses yet. Use "Add to memory" on the verse to carry, or tap a verse number while reading and choose Memorize.</p>');
+    : '<p class="helper">No memory verses yet.</p>');
   $("dialogBody").querySelectorAll("[data-memory-practice]").forEach(button => button.onclick = () => {
     const item = state.memory.find(entry => entry.id === button.dataset.memoryPractice); if (item) showPractice(item.label, item.text);
   });
@@ -324,7 +320,7 @@ function handleTodayAction(button) {
     const carry = verseToCarry(katamerosDay(todayKey));
     if (!carry) return true;
     if (data.carryPractice) showPractice(carry.label, carry.text);
-    else { const added = addMemoryVerse(carry.passages); persist(); notify(added ? "Added to your memory verses" : "Already in your memory verses"); renderToday(todayKey); }
+    else { const added = addMemoryVerse(carry.passages); persist(); notify(added ? "Added to memory" : "Already in memory"); renderToday(todayKey); }
   } else if (data.tabOpen) openTab(data.tabOpen);
   else if (data.planChoose) showReadingPlan(true, undefined, null);
   else if (data.memoryReview) { if (memoryDue().length) showMemoryReview(); else showMemoryList(); }

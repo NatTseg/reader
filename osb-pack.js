@@ -76,10 +76,10 @@ async function lockOsb() {
 }
 function osbSettingsHtml() {
   if (personalNotesCount && osbPackState === "unlocked")
-    return `<p class="helper">Your Orthodox Study Bible introductions, footnotes, and section headings are open on this device.</p><button class="text-button" id="lockOsb">Lock on this device</button>`;
+    return `<p class="helper">Unlocked on this device</p><button class="text-button" id="lockOsb">Lock</button>`;
   if (personalNotesCount)
-    return `<p class="helper">Using the study file you imported on this device.</p>`;
-  return `<p class="helper">Open your Orthodox Study Bible introductions, footnotes, and section headings with your private link or passphrase.</p><form id="osbUnlockForm" class="osb-unlock"><input id="osbPassphrase" type="password" autocomplete="current-password" placeholder="Passphrase" aria-label="OSB passphrase"><button class="secondary" type="submit">Unlock</button></form><p class="helper" id="osbUnlockStatus" role="status"></p>`;
+    return `<p class="helper">Using an imported study file</p>`;
+  return `<form id="osbUnlockForm" class="osb-unlock"><input id="osbPassphrase" type="password" autocomplete="current-password" placeholder="Passphrase" aria-label="OSB passphrase"><button class="secondary" type="submit">Unlock</button></form><p class="helper" id="osbUnlockStatus" role="status"></p>`;
 }
 function wireOsbSettings() {
   if ($("lockOsb")) $("lockOsb").onclick = async () => {

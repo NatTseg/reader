@@ -1206,3 +1206,17 @@ dialog.text-sheet { margin: auto auto 0; width: min(100%, 560px); border-radius:
 .plan-chapter { padding: 8px 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; }
 .plan-chapter.is-read { color: var(--accent); border-color: var(--accent); background: var(--soft); }
 .plan-start { display: block; margin: 12px 0 4px; }
+
+/* Wisdom */
+.wisdom-daily { display: block; width: 100%; text-align: left; margin: 14px 0 16px; padding: 16px 18px; border: 1px solid var(--accent); border-radius: 16px; background: var(--surface, var(--bg)); color: var(--text); cursor: pointer; }
+.wisdom-daily small { display: block; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.wisdom-daily span { display: block; margin: 8px 0 6px; font: calc(var(--fs) - 1px)/1.55 var(--reading-font, Georgia, serif); }
+.wisdom-daily em { font-style: normal; color: var(--muted); font-size: 13px; }
+.wisdom-filter { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, var(--bg)); color: var(--text); margin-bottom: 4px; }
+.wisdom .topic small { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.wisdom .topic span { text-align: left; }
+.passage-actions { display: flex; gap: 14px; }
+.wisdom-related { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.chip-button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; }
+.chip-button:hover { border-color: var(--accent); color: var(--accent); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

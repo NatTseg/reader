@@ -157,6 +157,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v37",
         "reader-v38",
         "reader-v39",
+        "reader-v40",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -177,7 +178,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1303,4 +1304,15 @@ test('quick text settings change size, font, and theme at once', () => {
   assert.equal(run('state.theme'),'dark');
   assert.equal(run('state.fontFamily'),'book');
   assert.equal(run('state.lineSpacing'),2.15);
+});
+
+test('Wisdom has fifty-plus topics of Scripture only, a daily topic, and searchable keywords', () => {
+  const run=reader();
+  assert.ok(run('wisdomTopics().length')>=50);
+  assert.equal(run('wisdomTopics().filter(t=>t.line).length'),0);
+  assert.ok(run('wisdomTopics().every(t=>t.refs.length>=6 && typeof t.tags==="string")'));
+  assert.equal(run('wisdomTopicOfDay("2026-11-11").id'),run('wisdomTopicOfDay("2026-11-11").id'));
+  assert.ok(run('wisdomTopics().some(t=>(t.title+" "+t.tags).includes("stress"))'));
+  run('loadPrefs({});state.memory=[];memorizeWisdomPassage("PHP:4:6:7");');
+  assert.equal(run('state.memory[0].label'),'Philippians 4:6–7');
 });

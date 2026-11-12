@@ -526,9 +526,9 @@ function renderChapter(scroll = 0) {
   const osbIntro = personalIntroductions[state.book];
   const intro = !state.showPreamble ? ""
     : osbIntro ? `<details class="introduction osb-intro"><summary>Introduction to ${esc(displayName(state.book))} <small>Orthodox Study Bible</small></summary><div class="osb-intro-body">${studyArticleHtml(osbIntro)}</div></details>`
-    : !personalNotesCount && state.chapter === 1 ? `<p class="helper osb-locked">The Orthodox Study Bible introduction and footnotes open with your private link or passphrase in <button class="text-button" data-open-settings="true">Reading settings</button>.</p>`
+    : !personalNotesCount && state.chapter === 1 ? `<p class="helper osb-locked"><button class="text-button" data-open-settings="true">Unlock OSB notes</button></p>`
     : "";
-  pane.innerHTML = `<div class="content"><p class="eyebrow">${esc(displayName(state.book))}</p><div class="chapter-heading"><h1>${state.book === "PS2" ? "Psalm 151" : "Chapter " + state.chapter}</h1><span>Tap a verse number to save</span></div><p class="translation-label">${isSeptuagint(state.book) ? "Septuagint · LXX2012" : "World English Bible · New Testament"}</p>${intro}<article class="verses">${rangeHtml(state.book, state.chapter)}</article><div class="chapter-end"><button class="secondary" data-direction="-1" ${!adjacent(-1) ? "disabled" : ""}>Previous</button><button class="secondary" data-direction="1" ${!adjacent(1) ? "disabled" : ""}>Next chapter</button></div>${notesHtml()}</div>`;
+  pane.innerHTML = `<div class="content"><p class="eyebrow">${esc(displayName(state.book))}</p><div class="chapter-heading"><h1>${state.book === "PS2" ? "Psalm 151" : "Chapter " + state.chapter}</h1></div><p class="translation-label">${isSeptuagint(state.book) ? "Septuagint · LXX2012" : "World English Bible · New Testament"}</p>${intro}<article class="verses">${rangeHtml(state.book, state.chapter)}</article><div class="chapter-end"><button class="secondary" data-direction="-1" ${!adjacent(-1) ? "disabled" : ""}>Previous</button><button class="secondary" data-direction="1" ${!adjacent(1) ? "disabled" : ""}>Next chapter</button></div>${notesHtml()}</div>`;
   pane.scrollTop = scroll * (pane.scrollHeight - pane.clientHeight);
   // A chapter that fits on one screen is read as soon as it is shown.
   if (typeof markPlanChapterRead === "function" && pane.scrollHeight && pane.scrollHeight <= pane.clientHeight + 40) markPlanChapterRead(state.book, state.chapter);
@@ -539,16 +539,56 @@ function returnToTopics() {
   renderWisdom();
   pane.scrollTop = wisdomListTop;
 }
+// Wisdom: Scripture by topic. A daily topic, a topic finder, and each passage with its OSB notes.
+function wisdomTopics() { return window.WISDOM.categories.flatMap(c => c.topics.map(t => ({...t, category: c.label}))); }
+function wisdomTopicOfDay(key = localDayKey()) {
+  const all = wisdomTopics(), n = [...key].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  return all[n % all.length];
+}
+let wisdomFilter = "";
 function renderWisdom() {
   cancelBackSlide();
   if (!wisdomTopic) {
-    pane.innerHTML = `<div class="content"><p class="eyebrow">Scripture for everyday life</p><h1>Wisdom</h1><p class="subtitle">Find a passage for what’s on your mind.</p>${window.WISDOM.categories.map((c) => `<h2 class="section-label">${esc(c.label)}</h2><div class="topic-grid">${c.topics.map((t) => `<button class="topic" data-topic="${t.id}">${esc(t.title)}${icon("right")}</button>`).join("")}</div>`).join("")}</div>`;
+    const daily = wisdomTopicOfDay(), [b, c, v, end = v] = daily.refs[0];
+    pane.innerHTML = `<div class="content wisdom"><h1>Wisdom</h1>
+      <button class="wisdom-daily" data-topic="${daily.id}"><small>For today · ${esc(daily.title)}</small><span>${esc(verseText(b, c, v))}</span><em>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</em></button>
+      <label class="visually-hidden" for="wisdomFilter">Find a topic</label><input id="wisdomFilter" class="wisdom-filter" type="search" placeholder="Find a topic" autocomplete="off" value="${esc(wisdomFilter)}">
+      <div id="wisdomList">${window.WISDOM.categories.map((cat) => `<section class="wisdom-category"><h2 class="section-label">${esc(cat.label)}</h2><div class="topic-grid">${cat.topics.map((t) => `<button class="topic" data-topic="${t.id}" data-search="${esc((t.title + " " + t.tags).toLowerCase())}"><span>${esc(t.title)}</span><small>${t.refs.length}</small>${icon("right")}</button>`).join("")}</div></section>`).join("")}<p class="helper" id="wisdomEmpty" hidden>No topics found.</p></div></div>`;
+    const filter = () => {
+      wisdomFilter = String($("wisdomFilter").value ?? "");
+      const q = wisdomFilter.trim().toLowerCase();
+      let shown = 0;
+      pane.querySelectorAll(".wisdom-category").forEach((section) => {
+        let any = 0;
+        section.querySelectorAll(".topic").forEach((button) => { const hit = !q || button.dataset.search.includes(q); button.hidden = !hit; any += hit; });
+        section.hidden = !any; shown += any;
+      });
+      if ($("wisdomEmpty")) $("wisdomEmpty").hidden = shown > 0 || !q;
+    };
+    $("wisdomFilter").oninput = filter;
+    filter();
   } else {
-    const t = wisdomTopic;
-    pane.innerHTML = `<div class="content"><button class="text-button" id="allTopics">‹ All topics</button><h1>${esc(t.title)}</h1><p class="subtitle">${esc(t.line)}</p>${t.refs.map(([b, c, v, end = v]) => `<section class="passage"><div class="passage-head"><span>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</span><button class="text-button" data-action="jump" data-key="${keyOf(b, c, v)}">Read chapter ›</button></div><article class="verses">${rangeHtml(b, c, v, end)}</article></section>`).join("")}</div>`;
+    const t = wisdomTopics().find((x) => x.id === wisdomTopic.id) || wisdomTopic;
+    const siblings = wisdomTopics().filter((x) => x.category === t.category && x.id !== t.id);
+    pane.innerHTML = `<div class="content wisdom"><button class="text-button" id="allTopics">‹ All topics</button><p class="eyebrow">${esc(t.category || "")}</p><h1>${esc(t.title)}</h1>
+      ${t.refs.map(([b, c, v, end = v]) => `<section class="passage"><div class="passage-head"><span>${esc(refLabel(b, c, v))}${end !== v ? "–" + end : ""}</span><span class="passage-actions"><button class="text-button" data-wisdom-memorize="${b}:${c}:${v}:${end}">Memorize</button><button class="text-button" data-action="jump" data-key="${keyOf(b, c, v)}">Chapter ›</button></span></div><article class="verses">${rangeHtml(b, c, v, end)}</article></section>`).join("")}
+      ${siblings.length ? `<h2 class="section-label">More in ${esc(t.category)}</h2><div class="wisdom-related">${siblings.map((x) => `<button class="chip-button" data-topic="${x.id}">${esc(x.title)}</button>`).join("")}</div>` : ""}</div>`;
     $("allTopics").onclick = returnToTopics;
   }
   pane.scrollTop = 0;
+}
+// Memorize a Wisdom passage (one verse or a short range).
+function memorizeWisdomPassage(spec) {
+  const [book, ch, start, end] = spec.split(":").map((x, i) => i ? Number(x) : x);
+  const verses = [];
+  for (let v = start; v <= end; v++) {
+    const first = sourceVerseStart(book, ch, v), text = verseText(book, ch, first);
+    if (text && !verses.some((x) => x.v === first)) verses.push({book, ch, v: first, text, label: sourceVerseLabel(book, ch, first)});
+  }
+  if (!verses.length || typeof addMemoryVerse !== "function") return;
+  const added = addMemoryVerse([{book, chapter: ch, verses}]);
+  persist();
+  notify(added ? "Added to memory" : "Already in memory");
 }
 let selectedPrayer = null;
 let prayerListTop = 0;
@@ -556,7 +596,7 @@ function renderPrayers() {
   cancelBackSlide();
   const prayer = window.PRAYERS.find((p) => p.id === selectedPrayer);
   if (!prayer) {
-    pane.innerHTML = `<div class="content"><p class="eyebrow">Daily prayer</p><h1>Prayer Book</h1><p class="subtitle">A collection of prayers to return to each day.</p><div class="prayer-list">${window.PRAYERS.map((p) => `<button class="topic" data-prayer="${p.id}"><span>${esc(p.title)}</span>${icon("right")}</button>`).join("")}</div></div>`;
+    pane.innerHTML = `<div class="content"><p class="eyebrow">Daily prayer</p><h1>Prayer Book</h1><div class="prayer-list">${window.PRAYERS.map((p) => `<button class="topic" data-prayer="${p.id}"><span>${esc(p.title)}</span>${icon("right")}</button>`).join("")}</div></div>`;
     pane.scrollTop = prayerListTop;
     return;
   }
@@ -594,7 +634,7 @@ function renderSaved() {
           ? !!state.highlights[k]
           : !!state.comments[k]),
   );
-  pane.innerHTML = `<div class="content"><p class="eyebrow">Your collection</p><h1>Saved verses</h1><p class="subtitle">Saved passages and the thoughts you leave with them.</p><div class="filters" aria-label="Filter saved verses">${[
+  pane.innerHTML = `<div class="content"><p class="eyebrow">Your collection</p><h1>Saved verses</h1><div class="filters" aria-label="Filter saved verses">${[
     ["all", "All"],
     ["bookmarks", "Bookmarks"],
     ["highlights", "Highlights"],
@@ -612,7 +652,7 @@ function renderSaved() {
             return `<button class="result ${state.highlights[key] ? "hl-" + state.highlights[key] : ""}" data-action="jump" data-key="${key}"><strong>${esc(refLabel(p.book, p.ch, p.v))}</strong><p>${esc(verseText(p.book, p.ch, p.v))}</p>${state.comments[key] ? `<small>Your note: ${esc(state.comments[key])}</small>` : ""}</button>`;
           })
           .join("")
-      : (state.legacySaved || []).length ? "" : `<div class="empty">${icon("bookmark")}<h2>${savedFilter === "all" ? "Your collection starts here." : "Nothing here yet."}</h2><p>Tap a verse number while reading to bookmark,<br>highlight, or leave a comment.</p><button class="secondary" id="startReading">Return to reading</button></div>`
+      : (state.legacySaved || []).length ? "" : `<div class="empty">${icon("bookmark")}<h2>Nothing saved yet</h2></div>`
   }</div>`;
   pane.querySelector(".content")?.insertAdjacentHTML("beforeend", legacySavedHtml());
   if ($("startReading")) $("startReading").onclick = () => openTab("bible");
@@ -795,7 +835,7 @@ function parseRef(raw) {
 function showSearch() {
   openDialog(
     "Search Scripture",
-    `<form class="search-form" id="searchForm"><input id="searchInput" type="search" aria-label="Passage or words" placeholder="John 3:16 or love one another" autocomplete="off"><button class="primary" type="submit">Search</button></form>${searchToolsHtml()}<p class="helper">Enter a passage, book name, or a phrase from Scripture.</p><div id="searchResults" aria-live="polite"></div>`,
+    `<form class="search-form" id="searchForm"><input id="searchInput" type="search" aria-label="Passage or words" placeholder="John 3:16 or love one another" autocomplete="off"><button class="primary" type="submit">Search</button></form>${searchToolsHtml()}<div id="searchResults" aria-live="polite"></div>`,
   );
   $("searchForm").onsubmit = (e) => {
     e.preventDefault();
@@ -877,7 +917,7 @@ function showVerse(book, ch, v) {
       <button class="verse-action" id="memorizeVerse" aria-pressed="${inMemory()}"><span class="verse-action-mark" aria-hidden="true">✦</span><span>${inMemory() ? "In memory" : "Memorize"}</span></button>
       <button class="verse-action" id="commentToggle" aria-expanded="${!!state.comments[key]}">${icon("note")}<span>Comment</span></button>
     </div>
-    <div class="verse-comment" id="verseComment" ${state.comments[key] ? "" : "hidden"}><label class="visually-hidden" for="comment">Your comment</label><textarea id="comment" rows="3" placeholder="Something to remember… (saves as you type)">${esc(state.comments[key] || "")}</textarea><div class="actions"><button class="secondary" id="saveComment">Done</button><button class="text-button" id="deleteComment" ${!state.comments[key] ? "disabled" : ""}>Remove comment</button></div></div>
+    <div class="verse-comment" id="verseComment" ${state.comments[key] ? "" : "hidden"}><label class="visually-hidden" for="comment">Your comment</label><textarea id="comment" rows="3" placeholder="Comment">${esc(state.comments[key] || "")}</textarea><div class="actions"><button class="secondary" id="saveComment">Done</button><button class="text-button" id="deleteComment" ${!state.comments[key] ? "disabled" : ""}>Remove comment</button></div></div>
     ${related ? `<details class="verse-related"><summary>Related passages</summary><div class="context-list">${related}</div></details>` : ""}`,
   );
   dialog.classList.add("note-sheet", "verse-sheet");
@@ -934,7 +974,7 @@ function showVerse(book, ch, v) {
     const added = memorizeBibleVerse(book, ch, v);
     $("memorizeVerse").setAttribute("aria-pressed", "true");
     $("memorizeVerse").lastElementChild.textContent = "In memory";
-    notify(added ? "Added to your memory verses. Review them from Today." : "Already in your memory verses");
+    notify(added ? "Added to memory" : "Already in memory");
   };
   $("copyVerse").onclick = async () => {
     try {
@@ -992,7 +1032,7 @@ function showSettings() {
       )
       .join(
         "",
-      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${osbSettingsHtml()}<details class="import-file"><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Old Testament: LXX2012, Brenton’s Greek Septuagint translation with language updates. New Testament: World English Bible. Psalm numbers follow the Septuagint; source verse ranges and gaps are preserved. Orthodox Study Bible notes are placed at the matching LXX2012 verse; a few whose verse could not be matched stay in the chapter's note list. Both Bible translations are public domain. <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012 source</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">WEB source</a>. Bookmarks, highlights, and comments are saved in this browser.</p>`,
+      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${osbSettingsHtml()}<details class="import-file"><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Text: <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">World English Bible</a></p>`,
   );
   bindReaderToolsSettings();
   $("personalNotesFile").onchange = importPersonalNotes;
@@ -1086,8 +1126,7 @@ function handleAction(event) {
   else if (button.dataset.chapter)
     goChapter(button.dataset.chapterBook, +button.dataset.chapter, button.dataset.verse ? +button.dataset.verse : null);
   else if (button.dataset.topic) {
-    wisdomBackSnapshot = captureSwipeView(pane);
-    wisdomListTop = pane.scrollTop;
+    if (!wisdomTopic) { wisdomBackSnapshot = captureSwipeView(pane); wisdomListTop = pane.scrollTop; }
     wisdomTopic = window.WISDOM.categories
       .flatMap((c) => c.topics)
       .find((t) => t.id === button.dataset.topic);
@@ -1095,7 +1134,8 @@ function handleAction(event) {
   } else if (button.dataset.filter) {
     savedFilter = button.dataset.filter;
     renderSaved();
-  } else if (button.dataset.direction) nextChapter(+button.dataset.direction);
+  } else if (button.dataset.wisdomMemorize) memorizeWisdomPassage(button.dataset.wisdomMemorize);
+  else if (button.dataset.direction) nextChapter(+button.dataset.direction);
   else if (button.dataset.essay) showEssay(button.dataset.essay);
 }
 pane.addEventListener("click", handleAction);

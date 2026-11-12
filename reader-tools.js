@@ -65,7 +65,7 @@ function setFocusReading(on) {
 }
 function showReadingHistory() {
   const parent=captureSwipeView(dialog);
-  openDialog('Recent passages',`<button class="text-button" id="toolsBack">‹ Reading settings</button><p class="helper">Your last 50 chapters, with their saved reading positions.</p>${(state.history||[]).map((item,i)=>`<button class="result" data-history-index="${i}"><strong>${esc(refLabel(item.book,item.chapter))}</strong><small>${esc(new Date(item.ts).toLocaleDateString())}</small></button>`).join('')||'<p>No recent passages yet.</p>'}`);
+  openDialog('Recent passages',`<button class="text-button" id="toolsBack">‹ Reading settings</button>${(state.history||[]).map((item,i)=>`<button class="result" data-history-index="${i}"><strong>${esc(refLabel(item.book,item.chapter))}</strong><small>${esc(new Date(item.ts).toLocaleDateString())}</small></button>`).join('')||'<p>No recent passages yet.</p>'}`);
   dialogBack=showSettings;dialogBackSnapshot=parent;$('toolsBack').onclick=showSettings;
 }
 function planDays(id) {
@@ -98,7 +98,7 @@ function planName(id) {return {'gospels':'The Gospels in 30 days','psalms':'Psal
 function showReadingPlan(choose=false,day,parent=captureSwipeView(dialog)) {
   const plan=state.readingPlan;
   let html='<button class="text-button" id="toolsBack">‹ Reading settings</button>';
-  if(!plan||choose) html+=`<p>Choose a daily reading plan. Progress is saved offline and included in backups.</p>${plan?'<p class="helper">Choosing a plan starts its progress again.</p>':''}${['gospels','psalms','whole-bible'].map(id=>`<button class="result" data-start-plan="${id}"><strong>${planName(id)}</strong></button>`).join('')}`;
+  if(!plan||choose) html+=`${plan?'<p class="helper">Choosing a plan starts its progress again.</p>':''}${['gospels','psalms','whole-bible'].map(id=>`<button class="result" data-start-plan="${id}"><strong>${planName(id)}</strong></button>`).join('')}`;
   else {
     const days=planDays(plan.id),next=days.findIndex((_,i)=>!plan.completed.includes(i));
     const selected=Number.isInteger(day)?Math.max(0,Math.min(days.length-1,day)):next<0?days.length-1:next;
