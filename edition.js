@@ -28,3 +28,11 @@ function versePosition(book, chapter, label) {
 function flatText(text) {
   return String(text || "").replace(/\s*\n\s*/g, " ");
 }
+// Typographic quotes and dashes as the ones on a keyboard, character for character.
+function foldTypography(text) {
+  return String(text || "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[—–]/g, "-");
+}
+// Text as it is searched: on one line, in lower case, so a query typed with straight quotes finds the printed ones.
+function searchFold(text) {
+  return foldTypography(flatText(text).toLowerCase());
+}

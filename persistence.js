@@ -1,5 +1,5 @@
 // Durable reader state lives in this edition's own IndexedDB database.
-// Backup files hold reading data only: never the Bible text, study material, or cloud credentials.
+// Backup files hold reading data only (references, colours, your comments): never the Bible text or study material.
 let persistenceReady = false, persistenceBusy = false;
 let readerSaveQueue = Promise.resolve(), persistenceWarningShown = false;
 function studyRead(key) {

@@ -37,6 +37,11 @@ for (const file of walk(out)) {
 for (const pack of ["bible.enc", "study.enc"]) if (fs.readFileSync(path.join(out, pack)).includes(Buffer.from("the Lord"))) { console.error(pack + " is not encrypted"); process.exit(1); }
 console.log("No readable text in the output (" + samples.length + " passages checked).");
 ' "$OUT"
+if [ -n "${DRY_RUN:-}" ]; then
+  echo "Dry run: $(find "$OUT" -type f | wc -l | tr -d ' ') files, $(du -sh "$OUT" | cut -f1) ready; nothing published."
+  find "$OUT" -maxdepth 1 -type f | sed "s#$OUT/##" | sort | tr '\n' ' '; echo
+  exit 0
+fi
 gh repo view "$PAGES_REPO" >/dev/null 2>&1 || gh repo create "$PAGES_REPO" --public --description "Encrypted reading copy (private link required)" >/dev/null
 cd "$OUT" && git init -q -b main && git add -A && git commit -qm "Deploy $(date -u +%FT%TZ)"
 git push -q --force "https://github.com/$PAGES_REPO.git" main

@@ -48,7 +48,8 @@ function validatePersonalNotes(data) {
   }
   return { notes, preambles, guides, introductions, sourceNotes, alignment, textNotes };
 }
-function applyPersonalNotes(data) {
+// Sets the study material without drawing anything.
+function setStudyData(data) {
   const imported = !!data;
   data = data || {notes: builtInStudy.notes, preambles: {}};
   window.STUDY.notes = data.notes;
@@ -58,11 +59,13 @@ function applyPersonalNotes(data) {
   personalGuides = data.guides || [];
   personalIntroductions = data.introductions || {};
   personalTextNotes = data.textNotes || {};
-  const top = pane.scrollTop;
-  if (state.tab === "bible") renderChapter(state.scroll);
-  else if (state.tab === "wisdom") renderWisdom();
-  else if (state.tab === "library") renderLibrary();
-  pane.scrollTop = top;
+}
+// Sets the study material and redraws the current view where it was.
+function applyPersonalNotes(data) {
+  setStudyData(data);
+  if (state.tab === "bible") renderChapterInPlace();
+  else if (state.tab === "wisdom") { const top = pane.scrollTop; renderWisdom(); pane.scrollTop = top; }
+  else if (state.tab === "library") { const top = pane.scrollTop; renderLibrary(); pane.scrollTop = top; }
 }
 // Import structured text only: source markup never becomes executable HTML.
 function validateStudyArticle(article) {

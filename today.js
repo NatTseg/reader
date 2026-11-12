@@ -116,12 +116,16 @@ function readingStreak(today = localDayKey()) {
 }
 
 // ----- Memory verses: Leitner boxes with growing intervals -----
+// The words of a memory verse are read from the Bible each time it is shown; only its references are stored.
+function memoryText(item) {
+  return (item.ref || []).flatMap(part => (part.verses || []).map(([ch, v]) => flatText(verseText(part.book, ch, v)))).filter(Boolean).join(" ");
+}
 function memoryId(passages) { return passages.map(p => `${p.book}:${p.verses.map(v => `${v.ch}.${v.v}`).join(",")}`).join(";"); }
 function addMemoryVerse(passages, today = localDayKey()) {
   state.memory ||= [];
   const id = memoryId(passages);
   if (state.memory.some(item => item.id === id)) return false;
-  state.memory.push({id, label: passageLabel(passages), text: passages.flatMap(p => p.verses.map(v => v.text)).join(" "),
+  state.memory.push({id, label: passageLabel(passages),
     ref: passages.map(p => ({book: p.book, verses: p.verses.map(v => [v.ch, Number(v.v)])})), box: 0, due: today, added: Date.now(), reviews: 0});
   return true;
 }
@@ -288,10 +292,10 @@ function showMemoryReview(queue = memoryDue().map(item => item.id), index = 0, c
     $("reviewList").onclick = () => showMemoryList();
     return;
   }
-  openDialog(`Review ${index + 1} of ${queue.length}`, `<p class="eyebrow">${esc(item.label)}</p><div class="practice-text" id="reviewText">${practiceHtml(item.text, 3)}</div><div class="actions" id="reviewActions"><button class="primary" id="reviewShow">Show the verse</button></div>`);
+  openDialog(`Review ${index + 1} of ${queue.length}`, `<p class="eyebrow">${esc(item.label)}</p><div class="practice-text" id="reviewText">${practiceHtml(memoryText(item), 3)}</div><div class="actions" id="reviewActions"><button class="primary" id="reviewShow">Show the verse</button></div>`);
   $("dialogBody").querySelectorAll("[data-reveal]").forEach(button => button.onclick = () => { button.firstElementChild.hidden = true; button.lastElementChild.hidden = false; button.classList.add("revealed"); });
   $("reviewShow").onclick = () => {
-    $("reviewText").textContent = item.text;
+    $("reviewText").textContent = memoryText(item);
     $("reviewActions").innerHTML = '<button class="secondary" id="reviewMissed">Not yet</button><button class="primary" id="reviewGot">I knew it</button>';
     $("reviewMissed").onclick = () => { reviewMemory(item.id, false); persist(); showMemoryReview(queue, index + 1, correct); };
     $("reviewGot").onclick = () => { reviewMemory(item.id, true); persist(); showMemoryReview(queue, index + 1, correct + 1); };
@@ -300,12 +304,12 @@ function showMemoryReview(queue = memoryDue().map(item => item.id), index = 0, c
 function showMemoryList() {
   const items = (state.memory || []).slice().sort((a, b) => a.due.localeCompare(b.due));
   const today = localDayKey();
-  openDialog("Memory verses", items.length ? `<div class="memory-list">${items.map(item => `<article class="memory-item"><strong>${esc(item.label)}</strong><p>${esc(item.text)}</p>
+  openDialog("Memory verses", items.length ? `<div class="memory-list">${items.map(item => `<article class="memory-item"><strong>${esc(item.label)}</strong><p>${esc(memoryText(item))}</p>
     <small>${item.due <= today ? "Due today" : `Next review in ${daysBetween(today, item.due)} day${daysBetween(today, item.due) === 1 ? "" : "s"}`} · ${item.reviews || 0} reviews</small>
     <div class="actions"><button class="text-button" data-memory-practice="${esc(item.id)}">Practice</button><button class="text-button" data-memory-remove="${esc(item.id)}">Remove</button></div></article>`).join("")}</div>`
     : '<p class="helper">No memory verses yet.</p>');
   $("dialogBody").querySelectorAll("[data-memory-practice]").forEach(button => button.onclick = () => {
-    const item = state.memory.find(entry => entry.id === button.dataset.memoryPractice); if (item) showPractice(item.label, item.text);
+    const item = state.memory.find(entry => entry.id === button.dataset.memoryPractice); if (item) showPractice(item.label, memoryText(item));
   });
   $("dialogBody").querySelectorAll("[data-memory-remove]").forEach(button => button.onclick = () => {
     state.memory = state.memory.filter(entry => entry.id !== button.dataset.memoryRemove); persist(); showMemoryList();
@@ -347,9 +351,12 @@ function normalizeToday(reader) {
   const done = reader.today?.done && typeof reader.today.done === "object" ? reader.today.done : {};
   reader.today = {done: Object.fromEntries(Object.entries(done).filter(([key, ids]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Array.isArray(ids))
     .map(([key, ids]) => [key, ids.filter(id => typeof id === "string" && id.length < 200).slice(0, 40)]).slice(-800))};
-  reader.memory = (Array.isArray(reader.memory) ? reader.memory : []).filter(item => item && typeof item.id === "string" && typeof item.text === "string" &&
+  // A memory verse is its references; any stored wording is dropped.
+  const memoryRef = item => (Array.isArray(item.ref) ? item.ref : []).filter(part => part && typeof part.book === "string" && Array.isArray(part.verses))
+    .map(part => ({book: part.book, verses: part.verses.filter(v => Array.isArray(v) && validVerse(part.book, v[0], v[1])).map(v => [v[0], v[1]])})).filter(part => part.verses.length);
+  reader.memory = (Array.isArray(reader.memory) ? reader.memory : []).filter(item => item && typeof item.id === "string" && memoryRef(item).length &&
     typeof item.label === "string" && Number.isInteger(item.box) && item.box >= 0 && item.box < MEMORY_INTERVALS.length && /^\d{4}-\d{2}-\d{2}$/.test(item.due || ""))
-    .slice(0, 1000).map(item => ({id: item.id.slice(0, 500), label: item.label.slice(0, 300), text: item.text.slice(0, 5000), ref: Array.isArray(item.ref) ? item.ref : [],
+    .slice(0, 1000).map(item => ({id: item.id.slice(0, 500), label: item.label.slice(0, 300), ref: memoryRef(item),
       box: item.box, due: item.due, added: Number(item.added) || 0, reviews: Number(item.reviews) || 0, ...(item.last ? {last: String(item.last).slice(0, 10)} : {})}));
   reader.openTodayFirst = reader.openTodayFirst !== false;
   if (typeof reader.lastOpenDay !== "string") delete reader.lastOpenDay;

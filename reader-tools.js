@@ -134,10 +134,11 @@ function searchToolsHtml() {
   return `<div class="search-filters"><label for="searchArea">Search in</label><select id="searchArea"><option value="all">All Scripture</option><option value="ot">Old Testament</option><option value="nt">New Testament</option><option value="book">One book</option><option value="notes">Study notes</option><option value="guides">Guides &amp; introductions</option></select><select id="searchBook" aria-label="Book to search" hidden>${bookOrder().map(id=>`<option value="${id}" ${state.book===id?'selected':''}>${esc(displayName(id))}</option>`).join('')}</select></div>`;
 }
 function searchStudyContent(query,area) {
-  const needle=query.toLocaleLowerCase(),found=[];
-  const contains=text=>String(text||'').toLocaleLowerCase().includes(needle);
+  const fold=text=>foldTypography(String(text||'').toLocaleLowerCase());
+  const needle=fold(query),found=[];
+  const contains=text=>fold(text).includes(needle);
   if(area==='notes')for(const [key,note]of Object.entries(personalSourceNotes)){
-    if(contains(note.body)){const p=parseKey(key),at=Math.max(0,note.body.toLocaleLowerCase().indexOf(needle)-60);found.push(`<button class="result" data-note-key="${esc(key)}" data-source-note="true"><strong>${esc(refLabel(p.book,p.ch,p.v))}</strong><p>${at?'…':''}${esc(note.body.slice(at,at+180))}${note.body.length>at+180?'…':''}</p></button>`);if(found.length===80)break;}
+    if(contains(note.body)){const p=parseKey(key),at=Math.max(0,fold(note.body).indexOf(needle)-60);found.push(`<button class="result" data-note-key="${esc(key)}" data-source-note="true"><strong>${esc(refLabel(p.book,p.ch,p.v))}</strong><p>${at?'…':''}${esc(note.body.slice(at,at+180))}${note.body.length>at+180?'…':''}</p></button>`);if(found.length===80)break;}
   }
   if(area==='notes')for(const [key,list]of Object.entries(personalTextNotes)){
     if(found.length>=80)break;

@@ -134,6 +134,8 @@ function notify(message) {
   toastTimer = setTimeout(() => $("toast").classList.remove("show"), 3200);
 }
 function persist() {
+  // Nothing is saved until the stored state has been read: an early save would replace it with defaults.
+  if (typeof persistenceReady !== "undefined" && !persistenceReady) return;
   if (typeof persistenceBusy !== "undefined" && persistenceBusy) return;
   if (typeof recordHistory === "function" && state.tab === "bible") recordHistory();
   state.savedAt = Math.max(Date.now(), (Number(state.savedAt) || 0) + 1);
@@ -362,6 +364,17 @@ function rangeHtml(
 }
 function notesHtml() {
   return state.showNotes ? alignedChapterNotesHtml() : "";
+}
+// Redraws the chapter being read without moving it: the first verse in view stays where it is on screen.
+// (The saved position is a fraction of the chapter's height, which changes when notes are shown or hidden.)
+function renderChapterInPlace() {
+  const paneTop = pane.getBoundingClientRect?.().top ?? 0;
+  const anchor = [...pane.querySelectorAll(".verse[data-verse]")].find((el) => el.getBoundingClientRect().bottom > paneTop);
+  const verse = anchor?.dataset.verse, offset = anchor ? anchor.getBoundingClientRect().top - paneTop : 0;
+  renderChapter(state.scroll);
+  const again = verse && pane.querySelector(`.verse[data-verse="${verse}"]`);
+  if (again) pane.scrollTop += again.getBoundingClientRect().top - paneTop - offset;
+  rememberScroll();
 }
 function renderChapter(scroll = 0) {
   cancelBackSlide();
@@ -786,7 +799,7 @@ async function runSearch() {
   }
   results.innerHTML = '<p class="helper">Searching…</p>';
   const found = [],
-    needle = query.replace(/\s+/g, " ").toLowerCase();
+    needle = searchFold(query.replace(/\s+/g, " "));
   for (const book of bookOrder()) {
     if ((area === "ot" && !isSeptuagint(book)) || (area === "nt" && isSeptuagint(book)) || (area === "book" && book !== $("searchBook").value)) continue;
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -794,7 +807,7 @@ async function runSearch() {
     const chapters = window.BIBLE.t[book];
     for (let c = 0; c < chapters.length && found.length < 80; c++)
       for (let v = 1; v < chapters[c].length && found.length < 80; v++)
-        if (flatText(chapters[c][v]).toLowerCase().includes(needle))
+        if (searchFold(chapters[c][v]).includes(needle))
           found.push({ book, ch: c + 1, v });
     if (found.length >= 80) break;
   }
@@ -977,7 +990,7 @@ function showSettings() {
           state[btn.dataset.setting] = !state[btn.dataset.setting];
           btn.textContent = state[btn.dataset.setting] ? "On" : "Off";
           btn.setAttribute("aria-pressed", !!state[btn.dataset.setting]);
-          if (state.tab === "bible") renderChapter(state.scroll);
+          if (state.tab === "bible") renderChapterInPlace();
           else if (state.tab === "wisdom") {
             const top = pane.scrollTop;
             renderWisdom();
@@ -1076,6 +1089,7 @@ pane.addEventListener(
   { passive: true },
 );
 window.addEventListener("pagehide", () => {
+  if (!persistenceReady) return;
   rememberScroll();
   persist();
 });
@@ -1087,7 +1101,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 $("exitFocus").onclick = () => setFocusReading(false);
-pane.addEventListener("click", event => { if (focusReading && !event.target.closest("button,a,input,summary") && !window.getSelection()?.toString()) setFocusReading(false); });
+pane.addEventListener("click", event => { if (focusReading && !event.target.closest("button,a,input,summary,sup.tn") && !window.getSelection()?.toString()) setFocusReading(false); });
 $("home").onclick = (e) => {
   e.preventDefault();
   openTab("bible");
@@ -1196,12 +1210,16 @@ if (window.BIBLE?.t) {
   const storedReader = await readStoredReader();
   persistenceReady = true;
   loadPrefs(storedReader || {});
+  // The study pack opens before anything is drawn: a chapter is laid out once, with its notes, so the saved
+  // reading position is restored on the same page it was saved on.
+  let studyOpened = true;
+  await loadOsbStudy().catch(() => { studyOpened = false; });
   // The first visit of each day opens Today, so the day's readings are the first thing seen.
   if (state.openTodayFirst !== false && window.KATAMEROS && state.lastOpenDay !== localDayKey()) state.tab = "today";
   state.lastOpenDay = localDayKey();
   selectTab(state.tab);
   renderTab(state.tab);
-  await loadOsbStudy().catch(() => notify("The study notes could not be opened. Reload to try again."));
+  if (!studyOpened) notify("The study notes could not be opened. Reload to try again.");
   await restoreLibrary();
   setupLibraryReader();
   document.querySelector(".app").inert = false;

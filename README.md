@@ -67,8 +67,9 @@ After any change to served files, raise `CACHE` in `sw.js`.
 
 ## Local preview
 
-`python3 -m http.server 8080`, then open `http://localhost:8080/#osb=<key>` (the link in `.osb-unlock-link`,
-with the host changed).
+`python3 -m http.server 8080 --bind 127.0.0.1`, then open `http://localhost:8080/#osb=<key>` (the link in
+`.osb-unlock-link`, with the host changed). Keep the bind address: this folder holds the unlock link, and a
+server open to the network would hand it out.
 
 Lectionary references come from the open-source Katameros project (MIT). PDF.js and fflate are vendored with
 their licenses.
