@@ -33,7 +33,7 @@ function applyReaderToolsAppearance() {
 }
 function syncViewportTheme() {
   const scheme=state.theme==='dark'||state.theme==='night'?'dark':'light';
-  const color=state.theme==='night'?'#0c0e13':scheme==='dark'?'#191c1b':state.paper==='warm'?'#f2e7ce':state.paper==='neutral'?'#ffffff':'#f8f6f0';
+  const color=state.theme==='night'?'#0c0e13':scheme==='dark'?'#191c1b':state.theme==='sepia'?'#f1e4ca':'#fcfcfa';
   // Keep Safari's under-page background and older browsers' theme metadata in sync.
   // Give browser chrome the same concrete color as the rendered page edges.
   document.documentElement.style.backgroundColor=color;
@@ -178,8 +178,7 @@ function showTextSettings() {
   openDialogAs("text-sheet", "Text", `<div class="text-row"><span>Size</span><div class="stepper"><button class="secondary" id="quickFontDown" aria-label="Smaller text">A−</button><output id="quickFontValue">${state.font}</output><button class="secondary" id="quickFontUp" aria-label="Larger text">A+</button></div></div>
     <div class="text-row"><span>Font</span>${seg("font", [["serif", "Georgia"], ["book", "Palatino"], ["sans", "Sans"]], state.fontFamily)}</div>
     <div class="text-row"><span>Spacing</span>${seg("spacing", [[1.6, "Compact"], [1.85, "Normal"], [2.15, "Airy"]], [1.6, 1.85, 2.15].reduce((a, b) => Math.abs(b - state.lineSpacing) < Math.abs(a - state.lineSpacing) ? b : a))}</div>
-    ${state.theme === "light" ? `<div class="text-row"><span>Page</span>${seg("paper", [["original", "Original"], ["warm", "Warm"], ["neutral", "White"]], state.paper)}</div>` : ""}
-    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["dark", "Gray"], ["night", "Dark"]], state.theme)}</div>
+    <div class="text-row"><span>Theme</span>${seg("theme", [["light", "Light"], ["sepia", "Sepia"], ["dark", "Gray"], ["night", "Dark"]], state.theme)}</div>
     <button class="text-button more-settings" data-open-settings="true">More settings ›</button>`);
   dialog.classList.add("text-sheet");
   // Every change applies at once and keeps the reader at the same place in the chapter.

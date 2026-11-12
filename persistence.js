@@ -54,7 +54,7 @@ function validateBackup(value) {
   if (r.edition !== window.BIBLE.edition) throw new Error("This backup uses a different Bible edition. Keep the file and update the app before restoring it.");
   const isObject = x => x && typeof x === "object" && !Array.isArray(x);
   if (!bookMeta(r.book) || !Number.isInteger(r.chapter) || r.chapter < 1 || r.chapter > bookMeta(r.book).n ||
-      !["today","bible","wisdom","prayers","library","saved"].includes(r.tab) || !["light","dark","night"].includes(r.theme) ||
+      !["today","bible","wisdom","prayers","library","saved"].includes(r.tab) || !["light","sepia","dark","night"].includes(r.theme) ||
       !Number.isFinite(r.font) || r.font < 16 || r.font > 28 || !Number.isFinite(r.scroll) || r.scroll < 0 || r.scroll > 1 ||
       typeof r.showNotes !== "boolean" || typeof r.showPreamble !== "boolean" || !Array.isArray(r.bookmarks) ||
       !isObject(r.highlights) || !isObject(r.comments) || !Array.isArray(r.legacySaved)) fail();

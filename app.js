@@ -392,7 +392,9 @@ function loadPrefs(override) {
   if (!["today", "bible", "wisdom", "prayers", "library", "saved"].includes(state.tab))
     state.tab = "bible";
   if (typeof normalizeToday === "function") normalizeToday(state);
-  state.theme = ["dark", "night"].includes(state.theme) ? state.theme : "light";
+  if (state.theme === "light" && state.paper === "warm") state.theme = "sepia";
+  state.paper = "original";
+  state.theme = ["sepia", "dark", "night"].includes(state.theme) ? state.theme : "light";
   if (typeof normalizeReaderTools === "function") normalizeReaderTools(state);
   applyAppearance();
   persist();

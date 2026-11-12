@@ -1,18 +1,31 @@
 :root {
   color-scheme: light;
   background: var(--bg);
-  --bg: #f8f6f0;
-  --surface: #fffdf8;
-  --text: #302e29;
-  --muted: #686459;
-  --line: #e2ded4;
-  --accent: #884b3c;
-  --soft: #eee8dc;
+  --bg: #fcfcfa;
+  --surface: #ffffff;
+  --text: #25231f;
+  --muted: #68645b;
+  --line: #e6e3dc;
+  --accent: #8a4a38;
+  --soft: #f1eee8;
   --highlight: #efe0ac;
   --rose: #efd8d3;
   --paper: #e2e7da;
   --fs: 20px;
   --safe: env(safe-area-inset-bottom, 0px);
+}
+:root[data-theme="sepia"] {
+  /* Sepia: warm paper, clearly distinct from Light. */
+  --bg: #f1e4ca;
+  --surface: #f7eedc;
+  --text: #3f3125;
+  --muted: #6e5d47;
+  --line: #dccbab;
+  --accent: #8a4426;
+  --soft: #e8d8b9;
+  --highlight: #e6cc86;
+  --rose: #ebcbbd;
+  --paper: #d6dcc0;
 }
 :root[data-theme="night"] {
   /* True dark: near-black with a cool twilight cast, not the green-gray of Gray. */
@@ -1103,8 +1116,8 @@ dialog.swipe-settling::backdrop { transition: background .2s ease, backdrop-filt
 #restoreBackupFile { margin: 10px 0; }
 #exportBackup { display: block; margin-bottom: 16px; }
 
-:root[data-paper="warm"]:not([data-theme="dark"]):not([data-theme="night"]) { --bg: #f2e7ce; --surface: #f7eedb; }
-:root[data-paper="neutral"]:not([data-theme="dark"]):not([data-theme="night"]) { --bg: #ffffff; --surface: #ffffff; }
+
+
 .verses, .prayer-text { font-family: var(--reading-font, Georgia, serif); line-height: var(--reading-leading, 1.85); }
 .essay p, .introduction p { font-family: var(--reading-font, Georgia, serif); line-height: var(--reading-leading, 1.85); }
 .setting select { max-width: 55%; padding: 8px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }

@@ -171,6 +171,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v49",
         "reader-v50",
         "reader-v51",
+        "reader-v52",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -191,7 +192,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "reader-v47", "reader-v48", "reader-v49", "reader-v50", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "reader-v41", "reader-v42", "reader-v43", "reader-v44", "reader-v45", "reader-v46", "reader-v47", "reader-v48", "reader-v49", "reader-v50", "reader-v51", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1386,10 +1387,14 @@ test('the chapter drawer lists OSB sections of the current chapter; an Agpeya ho
   assert.match(hour,/Closing/);
 });
 
-test('themes include Light, Gray, and a true Dark that survives backups', () => {
+test('themes are Light, Sepia, Gray, and Dark; a saved Warm page tone becomes Sepia', () => {
   const run=reader();
   run('loadPrefs({theme:"night"});');
   assert.equal(run('state.theme'),'night');
+  run('loadPrefs({theme:"light",paper:"warm"});');
+  assert.equal(run('state.theme'),'sepia');
+  run('loadPrefs({theme:"sepia"});');
+  assert.equal(run('state.theme'),'sepia');
   run('loadPrefs({theme:"purple"});');
   assert.equal(run('state.theme'),'light');
 });

@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="reader" />
     <script>
-      try { const saved = JSON.parse(localStorage.getItem("obible3") || "{}"); if (saved.theme === "dark" || saved.theme === "night") document.documentElement.dataset.theme = saved.theme; if (saved.paper) document.documentElement.dataset.paper = saved.paper; } catch {}
+      try { const saved = JSON.parse(localStorage.getItem("obible3") || "{}"); const theme = saved.theme === "light" && saved.paper === "warm" ? "sepia" : saved.theme; if (["sepia", "dark", "night"].includes(theme)) document.documentElement.dataset.theme = theme; } catch {}
     </script>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg?v=41" type="image/svg+xml" />
