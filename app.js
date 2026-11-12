@@ -713,7 +713,7 @@ function captureDialogReturn() {
 function showBooks() {
   openDialog(
     "Books & chapters",
-    '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button>${howToReadButton()}</div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
+    '<div class="book-tools"><button class="secondary" data-random-passage="true">Random passage</button>' + howToReadButton() + '</div><label class="helper" for="bookFilter">Find a book</label><input id="bookFilter" placeholder="e.g. John, Psalms, Sirach" autocomplete="off"><div id="bookResults"></div>',
   );
   const render = () => {
     const query = $("bookFilter").value.trim().toLowerCase();
@@ -1032,7 +1032,7 @@ function showSettings() {
       )
       .join(
         "",
-      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${osbSettingsHtml()}<details class="import-file"><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Text: <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">World English Bible</a></p>`,
+      )}${readerToolsSettingsHtml()}<h3 class="section-label">Your data</h3><button class="text-button" id="openStorage">Storage &amp; backup ›</button><br><button class="text-button" id="openCloudSync">Cloud sync ›</button><h3 class="section-label">Orthodox Study Bible</h3>${typeof osbSettingsHtml === "function" ? osbSettingsHtml() : ""}<details class="import-file"><summary class="helper">Import a study file instead</summary><p class="helper" id="personalNotesStatus">${personalContextStatus()}</p><label class="text-button" for="personalNotesFile">Import study notes</label><input id="personalNotesFile" type="file" accept=".json,application/json"></details><h3 class="section-label">Reading guides</h3>${howToReadButton()}<br><button class="text-button" data-context-library="true">OSB guides &amp; book introductions ›</button><p class="helper">Text: <a href="https://ebible.org/eng-lxx2012/" target="_blank" rel="noopener">LXX2012</a> · <a href="https://ebible.org/engwebu/" target="_blank" rel="noopener">World English Bible</a></p>`,
   );
   bindReaderToolsSettings();
   $("personalNotesFile").onchange = importPersonalNotes;

@@ -71,6 +71,7 @@ function reader(stored = {}) {
   for (const file of ["vendor/fflate/fflate.js", "library-formats.js", "library.js", "library-tools.js", "library-backup.js"])
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "note-alignment.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "osb-pack.js"), "utf8"), context);
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   // Bind functions and event handlers, without rendering the initial browser view.
   vm.runInContext(
@@ -158,6 +159,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
         "reader-v38",
         "reader-v39",
         "reader-v40",
+        "reader-v41",
         "orthodox-bible-v13",
         "orthodox-bible-v18",
         "orthodox-bible-v20",
@@ -178,7 +180,7 @@ test("activation deletes only old reader and legacy app caches", async () => {
     },
   });
   await job;
-  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
+  assert.deepEqual(deleted, ["reader-v30", "reader-v31", "reader-v32", "reader-v35", "reader-v36", "reader-v37", "reader-v38", "reader-v39", "reader-v40", "orthodox-bible-v13", "orthodox-bible-v18", "orthodox-bible-v20", "orthodox-bible-v28", "orthodox-bible-v29", "orthodox-bible-v30"]);
 });
 
 test("offline HTML fallback is reserved for navigation within this app", async () => {
@@ -1315,4 +1317,25 @@ test('Wisdom has fifty-plus topics of Scripture only, a daily topic, and searcha
   assert.ok(run('wisdomTopics().some(t=>(t.title+" "+t.tags).includes("stress"))'));
   run('loadPrefs({});state.memory=[];memorizeWisdomPassage("PHP:4:6:7");');
   assert.equal(run('state.memory[0].label'),'Philippians 4:6–7');
+});
+
+test('no screen or dialog shows uninterpolated template text', () => {
+  const run=reader();
+  run('dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};window.requestAnimationFrame=fn=>fn();loadPrefs({});for(const id of ["bookFilter","wisdomFilter"])$(id).value="";for(const id of ["closeDialog","bookFilter","searchInput","comment"])$(id).focus=()=>{};');
+  const views={
+    books:'showBooks();$("dialogBody").innerHTML',
+    settings:'showSettings();$("dialogBody").innerHTML',
+    text:'showTextSettings();$("dialogBody").innerHTML',
+    verse:'showVerse("JHN",3,16);$("dialogBody").innerHTML',
+    today:'renderToday("2026-11-11");pane.innerHTML',
+    wisdom:'wisdomTopic=null;renderWisdom();pane.innerHTML',
+    topic:'wisdomTopic=WISDOM.categories[0].topics[0];renderWisdom();pane.innerHTML',
+    chapter:'state.book="GEN";state.chapter=1;renderChapter(0);pane.innerHTML',
+    plan:'showReadingPlan(true,undefined,null);$("dialogBody").innerHTML',
+  };
+  for (const [name,expr] of Object.entries(views)) {
+    const html=run(expr);
+    assert.ok(!/\$\{|\bundefined\b|\bNaN\b|\[object Object\]/.test(html), `${name} contains template residue`);
+  }
+  assert.match(run('showBooks();$("dialogBody").innerHTML'),/How to read Scripture/);
 });
